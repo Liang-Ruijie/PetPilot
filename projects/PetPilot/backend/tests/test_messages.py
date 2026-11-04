@@ -82,6 +82,23 @@ def test_hold_segment(client, auth, monkeypatch):
     assert len(data["held_segments"]) == 1
 
 
+def test_near_miss_name_held(client, auth, monkeypatch):
+    # 模型错误地把“贝塔2”子串匹配到“贝塔”，服务端应挂起而不是归档
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+    text = "贝塔2 有点拉稀"
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets: {
+            "operations": [{"kind": "add_observation", "quote": text, "pet_id": 1, "topic": "状态"}],
+            "dialogue": {},
+        },
+    )
+    r = client.post("/api/messages", json={"text": text}, headers=auth)
+    data = r.json()
+    assert len(data["facts"]) == 0
+    assert len(data["held_segments"]) == 1
+
+
 def test_quote_invalid_dropped(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     text = "明月今天吃了26克"

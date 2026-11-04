@@ -16,7 +16,17 @@ class SchemaError(Exception):
 
 SYSTEM_PROMPT = """你是宠物合伙人 Personal Agent，服务猫主人的持续助理。把主人消息拆成增量操作，严格按 Schema 输出 JSON（只输出 JSON 对象，不要 markdown 代码块）。
 
-铁律：
+## 输出 Schema（每个 operation 必须是对象，且必须带 kind 字段）
+
+kind 只有两种取值：
+- add_observation：新增观察（归档到某只猫），字段：kind, op_id, quote, pet_id, topic, value, unit, quantity_scope, historical_current, occurred_at, polarity, change_kind
+- hold_segment：归属未知挂起，字段：kind, op_id, quote, reason, topic
+
+正确示例（主人消息“明月今天吃了26克，贝塔有点拉稀”）：
+{"operations":[{"kind":"add_observation","op_id":"a","quote":"明月今天吃了26克","pet_id":1,"topic":"进食","value":26,"unit":"克","quantity_scope":"intake","historical_current":"current","change_kind":"new"},{"kind":"add_observation","op_id":"b","quote":"贝塔有点拉稀","pet_id":2,"topic":"状态","polarity":"negative","change_kind":"new"}],"dialogue":{"answer":{"text":"收到，已分别记到明月和贝塔。"}}}
+禁止：把 observation 写成没有 kind 的对象；禁止用 hold_segment 承载已明确归属的片段。
+
+## 铁律
 0. op_id 从 a 开始递增；start/end 是 quote 在原文中的起止位置，不确定可写 0。
 1. pet_id 只能是「允许的宠物身份」里列出的 ID；不在列表或无法确认归属时，用 hold_segment 挂起（quote 保留原文），reason 写「归属未知」。不得编造 pet_id、不得留空、不得猜成当前宠物。
 2. 明确出现多只猫时拆成多个片段，各归各主；只有无法归属的片段才挂起。

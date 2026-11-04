@@ -19,6 +19,15 @@ def _receipt(facts_count: int, held_count: int) -> str:
     return "，".join(parts) if parts else "已收到（本次没有产生记录）"
 
 
+def _extract_text(val):
+    """宽容处理：模型可能把 answer/explanation 返回成字符串或对象。"""
+    if isinstance(val, str):
+        return val
+    if isinstance(val, dict):
+        return val.get("text", "")
+    return ""
+
+
 @router.post("/messages", response_model=MessageResult)
 def send_message(
     body: MessageIn,
@@ -82,8 +91,8 @@ def send_message(
         helds.append(hs)
 
     dialogue = raw.get("dialogue") or {}
-    answer = (dialogue.get("answer") or {}).get("text", "")
-    explanation = (dialogue.get("explanation") or {}).get("text", "")
+    answer = _extract_text(dialogue.get("answer"))
+    explanation = _extract_text(dialogue.get("explanation"))
 
     db.flush()
 
