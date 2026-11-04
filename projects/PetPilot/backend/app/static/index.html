@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PetPilot 临时验收界面</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 0; background: #f5f6f8; color: #1f2329; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 8px 0 4px; }
+    .hint { color: #888; font-size: 12px; margin-bottom: 12px; }
+    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    input, textarea { width: 100%; padding: 8px 10px; border: 1px solid #d8dde3; border-radius: 6px; font-size: 14px; }
+    button { padding: 8px 14px; border: none; border-radius: 6px; background: #2f6fed; color: #fff; font-size: 14px; cursor: pointer; }
+    button.ghost { background: #eef1f5; color: #1f2329; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .row input { flex: 1; }
+    .pet-tag { display: inline-block; background: #e8f0fe; color: #1a56db; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 13px; }
+    .msg { padding: 8px 0; border-bottom: 1px solid #f0f1f3; white-space: pre-wrap; font-size: 14px; }
+    .msg.user { color: #1f2329; }
+    .msg.assistant { color: #555; background: #fafbfc; border-radius: 6px; padding: 8px; }
+    .fact { padding: 6px 8px; background: #f7f9fb; border-radius: 6px; margin: 4px 0; font-size: 13px; }
+    .held { padding: 6px 8px; background: #fff8e6; border-radius: 6px; margin: 4px 0; font-size: 13px; }
+    .err { color: #c00; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PetPilot · 临时验收界面</h1>
+  <div class="hint">阶段 2-1 验收用，阶段 3 将换正式前端。验证码固定为 <b>123456</b>。</div>
+
+  <div class="card" id="loginCard">
+    <div class="row">
+      <input id="code" placeholder="验证码" value="123456">
+      <button onclick="login()">登录</button>
+    </div>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <div class="card" id="appCard" style="display:none">
+    <div class="row">
+      <input id="petName" placeholder="新猫名字，如：明月">
+      <button onclick="createPet()">建猫</button>
+    </div>
+    <div id="pets"></div>
+  </div>
+
+  <div class="card" id="chatCard" style="display:none">
+    <textarea id="text" rows="2" placeholder="记录一句话，如：明月今天吃了 26 克，贝塔有点拉稀"></textarea>
+    <div style="margin-top:8px"><button onclick="send()">发送</button></div>
+    <div id="result" style="margin-top:10px"></div>
+    <div style="margin-top:12px">
+      <button class="ghost" onclick="loadHistory()">刷新历史</button>
+      <button class="ghost" onclick="loadFacts()">查记录</button>
+      <button class="ghost" onclick="loadHeld()">查挂起</button>
+    </div>
+    <div id="history" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script>
+let token = localStorage.getItem('petpilot_token') || '';
+const $ = (id) => document.getElementById(id);
+function api(path, opts = {}) {
+  return fetch('/api' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) }
+  }).then(async r => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw data.error || { code: 'HTTP_ERROR', message: r.statusText };
+    return data;
+  });
+}
+function showApp() {
+  $('loginCard').style.display = 'none';
+  $('appCard').style.display = 'block';
+  $('chatCard').style.display = 'block';
+  loadPets(); loadHistory();
+}
+async function login() {
+  $('loginErr').textContent = '';
+  try {
+    const data = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ code: $('code').value }) }).then(r => r.json());
+    if (data.error) throw data.error;
+    token = data.token; localStorage.setItem('petpilot_token', token); showApp();
+  } catch (e) { $('loginErr').textContent = e.message || '登录失败'; }
+}
+async function createPet() {
+  const name = $('petName').value.trim(); if (!name) return;
+  await api('/pets', { method: 'POST', body: JSON.stringify({ name }) });
+  $('petName').value = ''; loadPets();
+}
+async function loadPets() {
+  const data = await api('/pets');
+  $('pets').innerHTML = data.pets.map(p => `<span class="pet-tag">${p.id}. ${p.name}</span>`).join('') || '（还没有猫，先建一只）';
+}
+async function send() {
+  const text = $('text').value.trim(); if (!text) return;
+  $('result').innerHTML = '';
+  try {
+    const data = await api('/messages', { method: 'POST', body: JSON.stringify({ text }) });
+    $('result').innerHTML =
+      `<div class="fact"><b>回执：</b>${data.receipt}</div>` +
+      data.facts.map(f => `<div class="fact">✅ 归档到「${f.pet_name}」：${f.topic || ''}${f.value != null ? ' ' + f.value : ''}${f.unit || ''}（出处：${f.quote}）</div>`).join('') +
+      data.held_segments.map(h => `<div class="held">⚠️ 归属未知：${h.quote}</div>`).join('') +
+      (data.answer ? `<div class="msg assistant">${data.answer}</div>` : '');
+    $('text').value = ''; loadHistory();
+  } catch (e) { $('result').innerHTML = `<div class="err">${e.code}: ${e.message}</div>`; }
+}
+async function loadHistory() {
+  const data = await api('/messages');
+  $('history').innerHTML = data.messages.map(m => `<div class="msg ${m.role}">${m.content}</div>`).join('') || '';
+}
+async function loadFacts() {
+  const data = await api('/facts');
+  $('history').innerHTML = data.facts.map(f => `<div class="fact">「${f.pet_name}」${f.topic || ''}${f.value != null ? ' ' + f.value : ''}${f.unit || ''}（出处：${f.quote}）</div>`).join('') || '（暂无记录）';
+}
+async function loadHeld() {
+  const data = await api('/held');
+  $('history').innerHTML = data.held_segments.map(h => `<div class="held">⚠️ 归属未知：${h.quote}</div>`).join('') || '（暂无挂起）';
+}
+if (token) { showApp(); }
+</script>
+</body>
+</html>
