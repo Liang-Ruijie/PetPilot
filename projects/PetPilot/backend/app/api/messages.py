@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_current_session, get_db
 from app.models import CareSummary, Correction, Fact, HeldSegment, Message, Pet, Reminder, WeeklyReview
 from app.schemas import MessageIn, MessageResult
-from app.services.attribution import resolve_operations
+from app.services.attribution import mention_count, resolve_operations
 from app.services.model_client import ModelClient, ModelError, SchemaError
 from app.services.reminder_intent import is_authorized_reminder, parse_due_time
 from app.services.summary import generate_care_summary
@@ -178,8 +178,14 @@ def send_message(
             continue  # 否定/假设/问句/引用不算授权
         due = parse_due_time(quote)
         pid = r.get("pet_id")
-        if pid not in allowed_ids:
-            pid = None
+        # 服务端裁决：提醒对象必须整词匹配，未明确指定不猜猫（R36）
+        mentioned = [p for p in pets if mention_count(p.name, quote) >= 1]
+        if pid in allowed_ids and pid in {p.id for p in mentioned}:
+            pass  # 明确提到，信任
+        elif len(mentioned) == 1:
+            pid = mentioned[0].id  # 明确表达优先
+        else:
+            pid = None  # 未指定 → 待补对象
         rem = Reminder(pet_id=pid, quote=quote, due_at=due, status="pending")
         db.add(rem)
         db.flush()

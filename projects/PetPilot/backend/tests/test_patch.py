@@ -56,3 +56,19 @@ def test_reminder_fill_time(client, auth, monkeypatch):
     r = client.post(f"/api/reminders/{rid}/update", json={"due_at": "明天上午九点"}, headers=auth)
     assert r.status_code == 200
     assert r.json()["due_at"] is not None
+
+
+def test_reminder_without_cat_not_attributed(client, auth, monkeypatch):
+    client.post("/api/pets", json={"name": "明月"}, headers=auth)
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None: {
+            "operations": [],
+            "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天提醒称重"}]},
+        },
+    )
+    r = client.post("/api/messages", json={"text": "明天提醒称重"}, headers=auth)
+    data = r.json()
+    assert len(data["reminders"]) == 1
+    assert data["reminders"][0]["pet_name"] is None  # 未指定猫，不猜

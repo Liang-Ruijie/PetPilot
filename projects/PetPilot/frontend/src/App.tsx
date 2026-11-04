@@ -194,6 +194,22 @@ function App() {
     }
   }
 
+  async function fillReminderPet(id: number) {
+    const name = prompt('给哪只猫？')
+    if (!name) return
+    const pet = pets.find((p) => p.name === name.trim())
+    if (!pet) {
+      setErr('没有这只猫，请先建猫')
+      return
+    }
+    try {
+      await api(`/reminders/${id}/update`, { method: 'POST', body: JSON.stringify({ pet_id: pet.id }) })
+      refresh('reminders')
+    } catch (e: unknown) {
+      setErr((e as { message?: string }).message || '选猫失败')
+    }
+  }
+
   async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -235,7 +251,7 @@ function App() {
   if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
 
   return (
-    <div className="min-h-dvh flex flex-col max-w-[760px] mx-auto px-4 sm:px-6">
+    <div className="h-dvh flex flex-col overflow-hidden max-w-[760px] mx-auto px-4 sm:px-6">
       <header className="flex items-center justify-between h-[56px] shrink-0">
         <div className="flex items-center gap-2.5">
           <PawPrint size={26} className="text-accent" />
@@ -342,12 +358,13 @@ function App() {
                   <div key={r.id} className="bg-surface border border-line rounded-card p-4">
                     <div className="text-[15px] text-ink">{r.quote}</div>
                     <div className="mt-1 text-[12px] text-muted">
-                      {r.pet_name ? `「${r.pet_name}」 · ` : ''}
+                      {r.pet_name ? `「${r.pet_name}」 · ` : '待补对象 · '}
                       {r.due_at || '待补时间'} · {r.status === 'pending' ? (r.is_due ? '已到期 · 待跟进' : '待提醒') : r.status}
                     </div>
                     {r.status === 'pending' && (
                       <div className="mt-2 flex gap-2 flex-wrap">
                         {!r.due_at && <button onClick={() => fillReminderTime(r.id)} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">补时间</button>}
+                        {!r.pet_name && <button onClick={() => fillReminderPet(r.id)} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">选猫</button>}
                         <button onClick={() => remAction(r.id, 'complete')} className="px-3 py-1.5 rounded-control bg-accent text-white text-[13px]">完成</button>
                         <button onClick={() => remAction(r.id, 'pause')} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">暂停</button>
                         <button onClick={() => remAction(r.id, 'cancel')} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">取消</button>
@@ -439,7 +456,7 @@ function App() {
       </main>
 
       {view === 'chat' && (
-        <footer className="sticky bottom-0 bg-canvas pb-3 pt-1 shrink-0">
+        <footer className="bg-canvas pb-3 pt-1 shrink-0">
           <div className="flex items-end gap-2 bg-surface border border-line rounded-composer shadow-composer p-1.5">
             <textarea
               ref={taRef}
@@ -467,7 +484,7 @@ function App() {
         </footer>
       )}
 
-      <nav className="sticky bottom-0 bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around">
+      <nav className="bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around">
         {VIEWS.map((v) => {
           const Icon = v.icon
           const active = view === v.key
