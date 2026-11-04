@@ -9,6 +9,7 @@ import {
   Inbox,
   ListChecks,
   MessageCircle,
+  Mic,
   PawPrint,
   Plus,
   X,
@@ -112,6 +113,9 @@ function App() {
   const [err, setErr] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [micSupported, setMicSupported] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
 
   const load = useCallback(async () => {
     try {
@@ -132,6 +136,39 @@ function App() {
     window.addEventListener('petpilot-auth-expired', onExpired)
     return () => window.removeEventListener('petpilot-auth-expired', onExpired)
   }, [])
+
+  // 语音输入（浏览器 Web Speech API；不支持/失败回退文字）
+  useEffect(() => {
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.lang = 'zh-CN'
+    rec.continuous = false
+    rec.interimResults = false
+    rec.onresult = (e: any) => {
+      const t = e.results[0][0]?.transcript || ''
+      if (t) setText((prev) => (prev ? prev + t : t))
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => {
+      setListening(false)
+      setErr('语音识别失败，请用文字输入')
+    }
+    recognitionRef.current = rec
+    setMicSupported(true)
+  }, [])
+
+  function startListening() {
+    const rec = recognitionRef.current
+    if (!rec || listening) return
+    try {
+      setListening(true)
+      rec.start()
+    } catch {
+      setListening(false)
+      setErr('语音识别不可用，请用文字输入')
+    }
+  }
 
   async function refresh(view: View) {
     try {
@@ -472,6 +509,15 @@ function App() {
                 }
               }}
             />
+            {micSupported && (
+              <button
+                onClick={startListening}
+                aria-label="语音输入"
+                className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
+              >
+                <Mic size={20} />
+              </button>
+            )}
             <button
               onClick={send}
               disabled={sending || !text.trim()}
