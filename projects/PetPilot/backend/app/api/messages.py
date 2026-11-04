@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import CareSummary, Correction, Fact, HeldSegment, Message, Pet, Reminder
+from app.models import CareSummary, Correction, Fact, HeldSegment, Message, Pet, Reminder, WeeklyReview
 from app.schemas import MessageIn, MessageResult
 from app.services.attribution import resolve_operations
 from app.services.model_client import ModelClient, ModelError, SchemaError
@@ -111,6 +111,12 @@ def send_message(
             quote=op.get("quote") or "",
             topic=op.get("topic"),
             reason="归属未知",
+            value=op.get("value"),
+            unit=op.get("unit"),
+            quantity_scope=op.get("quantity_scope"),
+            historical_current=op.get("historical_current"),
+            occurred_at=op.get("occurred_at"),
+            polarity=op.get("polarity"),
             status="pending",
         )
         db.add(hs)
@@ -151,6 +157,13 @@ def send_message(
             fact.unit = c["unit"]
         fact.quote = c.get("quote") or fact.quote
         fact.version += 1
+        # R24：同步——引用该事实的摘要/周回顾标记为过期
+        for s in db.query(CareSummary).all():
+            if fact.id in (s.fact_ids or []):
+                s.stale = True
+        for w in db.query(WeeklyReview).all():
+            if fact.id in (w.fact_ids or []):
+                w.stale = True
         correction_results.append(
             {"fact_id": fact.id, "pet_id": fact.pet_id, "new_value": new_value, "version": fact.version, "status": "ok"}
         )

@@ -3,8 +3,10 @@ import {
   ArrowUp,
   Bell,
   CalendarDays,
+  ChevronDown,
   FileText,
   Image,
+  Inbox,
   ListChecks,
   MessageCircle,
   PawPrint,
@@ -16,6 +18,7 @@ import {
   apiForm,
   type CareSummary,
   type Fact,
+  type Held,
   type Msg,
   type Pet,
   type Photo,
@@ -23,11 +26,12 @@ import {
   type WeeklyReview,
 } from './api'
 
-type View = 'chat' | 'records' | 'reminders' | 'photos' | 'care' | 'weekly'
+type View = 'chat' | 'records' | 'held' | 'reminders' | 'photos' | 'care' | 'weekly'
 
 const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
   { key: 'chat', label: '对话', icon: MessageCircle },
   { key: 'records', label: '记录', icon: ListChecks },
+  { key: 'held', label: '挂起', icon: Inbox },
   { key: 'reminders', label: '提醒', icon: Bell },
   { key: 'photos', label: '照片', icon: Image },
   { key: 'care', label: '摘要', icon: FileText },
@@ -97,6 +101,7 @@ function App() {
   const [pets, setPets] = useState<Pet[]>([])
   const [messages, setMessages] = useState<Msg[]>([])
   const [facts, setFacts] = useState<Fact[]>([])
+  const [held, setHeld] = useState<Held[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [photos, setPhotos] = useState<Photo[]>([])
   const [cares, setCares] = useState<CareSummary[]>([])
@@ -131,6 +136,7 @@ function App() {
   async function refresh(view: View) {
     try {
       if (view === 'records') setFacts((await api('/facts')).facts)
+      else if (view === 'held') setHeld((await api('/held')).held_segments)
       else if (view === 'reminders') setReminders((await api('/reminders')).reminders)
       else if (view === 'photos') setPhotos((await api('/photos')).photos)
       else if (view === 'care') setCares((await api('/care-summaries')).care_summaries)
@@ -175,6 +181,17 @@ function App() {
   async function remAction(id: number, action: 'complete' | 'pause' | 'cancel') {
     await api(`/reminders/${id}/${action}`, { method: 'POST' })
     refresh('reminders')
+  }
+
+  async function fillReminderTime(id: number) {
+    const t = prompt('提醒时间，比如：明天上午九点')
+    if (!t) return
+    try {
+      await api(`/reminders/${id}/update`, { method: 'POST', body: JSON.stringify({ due_at: t }) })
+      refresh('reminders')
+    } catch (e: unknown) {
+      setErr((e as { message?: string }).message || '补时间失败')
+    }
   }
 
   async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -294,6 +311,26 @@ function App() {
           </div>
         )}
 
+        {view === 'held' && (
+          <div>
+            <SectionTitle title="挂起" onClose={() => setView('chat')} />
+            {held.length === 0 ? (
+              <p className="text-[15px] text-secondary">暂无待归属的片段。建猫后，提到那只猫的片段会自动归过去。</p>
+            ) : (
+              <div className="space-y-2">
+                {held.map((h) => (
+                  <div key={h.id} className="bg-surface border border-line rounded-card p-4">
+                    <div className="text-[15px] text-ink">{h.quote}</div>
+                    <div className="mt-1 text-[12px] text-muted">
+                      {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知（建猫后自动补归属）
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {view === 'reminders' && (
           <div>
             <SectionTitle title="提醒" onClose={() => setView('chat')} />
@@ -306,10 +343,11 @@ function App() {
                     <div className="text-[15px] text-ink">{r.quote}</div>
                     <div className="mt-1 text-[12px] text-muted">
                       {r.pet_name ? `「${r.pet_name}」 · ` : ''}
-                      {r.due_at || '待补时间'} · {r.status === 'pending' ? (r.is_due ? '已到期' : '待提醒') : r.status}
+                      {r.due_at || '待补时间'} · {r.status === 'pending' ? (r.is_due ? '已到期 · 待跟进' : '待提醒') : r.status}
                     </div>
                     {r.status === 'pending' && (
-                      <div className="mt-2 flex gap-2">
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {!r.due_at && <button onClick={() => fillReminderTime(r.id)} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">补时间</button>}
                         <button onClick={() => remAction(r.id, 'complete')} className="px-3 py-1.5 rounded-control bg-accent text-white text-[13px]">完成</button>
                         <button onClick={() => remAction(r.id, 'pause')} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">暂停</button>
                         <button onClick={() => remAction(r.id, 'cancel')} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">取消</button>
@@ -326,16 +364,19 @@ function App() {
           <div>
             <SectionTitle title="照片" onClose={() => setView('chat')} />
             <div className="flex items-center gap-2 mb-4">
-              <select
-                value={photoPetId}
-                onChange={(e) => setPhotoPetId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-[40px] px-3 rounded-control border border-line bg-surface text-[14px] text-ink"
-              >
-                <option value="">不指定猫</option>
-                {pets.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={photoPetId}
+                  onChange={(e) => setPhotoPetId(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="h-[40px] pl-3 pr-8 rounded-control border border-line bg-surface text-[14px] text-ink appearance-none"
+                >
+                  <option value="">不指定猫</option>
+                  {pets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted" />
+              </div>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
               <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">上传照片</button>
             </div>
@@ -363,7 +404,7 @@ function App() {
               <div className="space-y-3">
                 {cares.map((c) => (
                   <div key={c.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] font-medium text-ink">「{c.pet_name}」{c.title}</div>
+                    <div className="text-[15px] font-medium text-ink">「{c.pet_name}」{c.title}{c.stale && <span className="ml-2 text-[12px] text-warning">（已过期，事实有更新）</span>}</div>
                     <p className="mt-2 text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">{c.summary}</p>
                     <button onClick={() => simulateReply(c.id)} className="mt-3 px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">模拟医院回复</button>
                   </div>
@@ -383,7 +424,7 @@ function App() {
               ) : (
                 weeklies.map((w) => (
                   <div key={w.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] font-medium text-ink">「{w.pet_name}」{w.title}</div>
+                    <div className="text-[15px] font-medium text-ink">「{w.pet_name}」{w.title}{w.stale && <span className="ml-2 text-[12px] text-warning">（已过期，事实有更新）</span>}</div>
                     <p className="mt-2 text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">{w.summary}</p>
                   </div>
                 ))

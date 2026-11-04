@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -45,8 +45,8 @@ class Fact(Base):
     occurred_at: Mapped[date | None] = mapped_column(Date)
     polarity: Mapped[str | None] = mapped_column(String(20))
     change_kind: Mapped[str] = mapped_column(String(20), default="new")
-    source_message_id: Mapped[int] = mapped_column(
-        ForeignKey("messages.id"), nullable=False
+    source_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id"), nullable=True
     )
     quote: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -61,6 +61,12 @@ class HeldSegment(Base):
     quote: Mapped[str] = mapped_column(Text, nullable=False)
     topic: Mapped[str | None] = mapped_column(String(50))
     reason: Mapped[str] = mapped_column(String(50), default="归属未知")
+    value: Mapped[float | None] = mapped_column(Float)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    quantity_scope: Mapped[str | None] = mapped_column(String(20))
+    historical_current: Mapped[str | None] = mapped_column(String(20))
+    occurred_at: Mapped[date | None] = mapped_column(Date)
+    polarity: Mapped[str | None] = mapped_column(String(20))
     resolved_pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"))
     status: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -101,6 +107,7 @@ class CareSummary(Base):
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     fact_ids: Mapped[list] = mapped_column(JSON, default=list)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    stale: Mapped[bool] = mapped_column(Boolean, default=False)
     source_message_id: Mapped[int] = mapped_column(
         ForeignKey("messages.id"), nullable=False
     )
@@ -127,4 +134,5 @@ class WeeklyReview(Base):
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     fact_ids: Mapped[list] = mapped_column(JSON, default=list)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    stale: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

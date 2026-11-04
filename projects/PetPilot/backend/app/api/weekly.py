@@ -48,7 +48,7 @@ def create_weekly_review(
             409, detail={"error": {"code": "WEEKLY_EMPTY", "message": "近 7 天无记录，不生成周回顾"}}
         )
 
-    summary = generate_weekly_review(label, facts, photos)
+    summary = generate_weekly_review(label, facts, len(photos))
     wr = WeeklyReview(
         pet_id=body.pet_id,
         title=title,
@@ -74,6 +74,7 @@ def list_weekly_reviews(
                 "pet_name": pet_names.get(w.pet_id, "全部猫") if w.pet_id else "全部猫",
                 "title": w.title,
                 "summary": w.summary,
+                "stale": w.stale,
             }
             for w in items
         ]

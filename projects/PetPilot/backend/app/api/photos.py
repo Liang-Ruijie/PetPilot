@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import Pet, Photo
+from app.models import Fact, Pet, Photo
 from app.services.storage import save_image, validate_image
 
 router = APIRouter()
@@ -33,13 +33,28 @@ async def upload_photo(
     safe_name, path = save_image(content, file.filename or "", _UPLOADS_DIR)
     if pet_id is not None and not db.query(Pet).filter(Pet.id == pet_id).first():
         pet_id = None
+    desc = description.strip()
     photo = Photo(
         pet_id=pet_id,
         filename=safe_name,
         stored_path=path,
-        description=description.strip(),
+        description=desc,
     )
     db.add(photo)
+    # 照片描述同时生成一条文字记录，归到这只猫（照片描述进记录）
+    if desc and pet_id is not None:
+        db.add(
+            Fact(
+                pet_id=pet_id,
+                topic="照片记录",
+                value=None,
+                unit=None,
+                change_kind="new",
+                source_message_id=None,
+                quote=desc,
+                version=1,
+            )
+        )
     db.commit()
     db.refresh(photo)
     pet_names = {p.id: p.name for p in db.query(Pet).all()}

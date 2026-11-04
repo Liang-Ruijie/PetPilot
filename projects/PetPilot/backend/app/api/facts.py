@@ -43,9 +43,22 @@ def list_facts(
 def list_held(
     db: Session = Depends(get_db), sess=Depends(get_current_session)
 ):
-    helds = db.query(HeldSegment).order_by(HeldSegment.id.desc()).all()
+    helds = (
+        db.query(HeldSegment)
+        .filter(HeldSegment.status == "pending")
+        .order_by(HeldSegment.id.desc())
+        .all()
+    )
     return {
         "held_segments": [
-            {"id": h.id, "quote": h.quote, "reason": h.reason} for h in helds
+            {
+                "id": h.id,
+                "quote": h.quote,
+                "reason": h.reason,
+                "topic": h.topic,
+                "value": h.value,
+                "unit": h.unit,
+            }
+            for h in helds
         ]
     }

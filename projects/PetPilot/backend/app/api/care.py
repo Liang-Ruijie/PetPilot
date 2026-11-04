@@ -25,6 +25,7 @@ def list_summaries(
                 "pet_name": pet_names.get(c.pet_id, ""),
                 "title": c.title,
                 "summary": c.summary,
+                "stale": c.stale,
             }
             for c in items
         ]

@@ -53,6 +53,20 @@ def parse_occurred_date(s: str | None) -> date | None:
         return date.today()
 
 
+def _hold_dict(op: dict, quote: str) -> dict:
+    """挂起时保留结构化字段，供补归属时重建事实。"""
+    return {
+        "quote": quote,
+        "topic": op.get("topic"),
+        "value": op.get("value"),
+        "unit": op.get("unit"),
+        "quantity_scope": op.get("quantity_scope"),
+        "historical_current": op.get("historical_current"),
+        "occurred_at": parse_occurred_date(op.get("occurred_at")),
+        "polarity": op.get("polarity"),
+    }
+
+
 def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
     """服务端裁决：pet_id 必须整词匹配；quote 必须落在原文；明确表达优先；纠错单独提取。"""
     allowed = {p.id: p for p in pets}
@@ -72,14 +86,14 @@ def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
             if pid in allowed and pid in mentioned_ids:
                 pass  # 明确提到，信任
             elif pid in allowed and _near_miss(allowed[pid].name, text):
-                holds.append({"quote": quote, "topic": op.get("topic")})  # 近名非整词，挂起
+                holds.append(_hold_dict(op, quote))  # 近名非整词，挂起
                 continue
             elif len(mentioned) == 1:
                 pid = mentioned[0].id  # 明确表达优先
             elif pid in allowed and len(pets) == 1:
                 pass  # 唯一猫，代词场景（如“它今天吃了26克”）
             else:
-                holds.append({"quote": quote, "topic": op.get("topic")})
+                holds.append(_hold_dict(op, quote))
                 continue
             op["pet_id"] = pid
             op["occurred_at"] = parse_occurred_date(op.get("occurred_at"))
@@ -88,7 +102,7 @@ def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
             quote = (op.get("quote") or "").strip()
             if not is_valid_quote(quote, text):
                 continue
-            holds.append({"quote": quote, "topic": op.get("topic")})
+            holds.append(_hold_dict(op, quote))
         elif kind == "correct_fact":
             quote = (op.get("quote") or "").strip()
             if not is_valid_quote(quote, text):

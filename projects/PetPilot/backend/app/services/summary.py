@@ -49,8 +49,8 @@ def generate_care_summary(pet_name: str, facts: list) -> str:
     return _generate(SUMMARY_PROMPT, f"宠物：{pet_name}", [_fact_line(f) for f in facts])
 
 
-def generate_weekly_review(pet_label: str, facts: list, photos: list | None = None) -> str:
+def generate_weekly_review(pet_label: str, facts: list, photo_count: int = 0) -> str:
     lines = [_fact_line(f) for f in facts]
-    for p in (photos or []):
-        lines.append(f"- 照片：{p.description or '（无描述）'}")
+    if photo_count > 0:
+        lines.append(f"- 照片：{photo_count} 张（原图已存）")
     return _generate(WEEKLY_PROMPT, f"猫：{pet_label}", lines)

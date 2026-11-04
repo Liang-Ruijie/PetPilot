@@ -22,7 +22,7 @@ operations 数组（每个 operation 必须是对象，必须带 kind 字段）�
 kind 有三种取值：
 - add_observation：新增观察（归档到某只猫），字段：kind, op_id, quote, pet_id, topic, value, unit, quantity_scope, historical_current, occurred_at, polarity, change_kind
 - correct_fact：纠错（更新已有事实），字段：kind, op_id, quote, fact_id, expected_version, pet_id, topic, value, unit
-- hold_segment：归属未知挂起，字段：kind, op_id, quote, reason, topic
+- hold_segment：归属未知挂起，字段：kind, op_id, quote, reason, topic, value, unit, quantity_scope, historical_current, polarity（保留原文已明确的数值/单位等信息，供补归属时重建）
 
 dialogue 对象（可选字段）：
 - answer：自然回答（对象 {"text":"..."} 或字符串）

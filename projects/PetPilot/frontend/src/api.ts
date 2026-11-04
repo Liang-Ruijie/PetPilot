@@ -1,10 +1,11 @@
 export type Pet = { id: number; name: string }
 export type Msg = { id: number; role: 'user' | 'assistant'; content: string }
 export type Fact = { id: number; pet_name: string; topic: string | null; value: number | null; unit: string | null; quote: string; version: number }
+export type Held = { id: number; quote: string; reason: string; topic: string | null; value: number | null; unit: string | null }
 export type Reminder = { id: number; pet_name: string | null; quote: string; due_at: string | null; status: string; is_due: boolean }
 export type Photo = { id: number; pet_name: string | null; filename: string; description: string }
-export type CareSummary = { id: number; pet_name: string; title: string; summary: string }
-export type WeeklyReview = { id: number; pet_name: string; title: string; summary: string }
+export type CareSummary = { id: number; pet_name: string; title: string; summary: string; stale: boolean }
+export type WeeklyReview = { id: number; pet_name: string; title: string; summary: string; stale: boolean }
 
 const API = '/api'
 

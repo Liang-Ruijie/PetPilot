@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import Pet
+from app.models import Fact, HeldSegment, Pet
 from app.schemas import PetCreate, PetOut
+from app.services.attribution import mention_count
 
 router = APIRouter()
 
@@ -33,6 +34,31 @@ def create_pet(
         )
     pet = Pet(name=name)
     db.add(pet)
+    db.flush()
+
+    # 补归属（R11/R12）：把之前挂起的、提到这只猫的片段自动归到它名下
+    pending = db.query(HeldSegment).filter(HeldSegment.status == "pending").all()
+    for h in pending:
+        if mention_count(name, h.quote) >= 1:
+            db.add(
+                Fact(
+                    pet_id=pet.id,
+                    topic=h.topic,
+                    value=h.value,
+                    unit=h.unit,
+                    quantity_scope=h.quantity_scope,
+                    historical_current=h.historical_current,
+                    occurred_at=h.occurred_at,
+                    polarity=h.polarity,
+                    change_kind="new",
+                    source_message_id=h.message_id,
+                    quote=h.quote,
+                    version=1,
+                )
+            )
+            h.status = "resolved"
+            h.resolved_pet_id = pet.id
+
     db.commit()
     db.refresh(pet)
     return {"id": pet.id, "name": pet.name}
