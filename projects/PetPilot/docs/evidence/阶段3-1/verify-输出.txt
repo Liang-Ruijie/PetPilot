@@ -1,18 +1,18 @@
-verify.sh 自检  2026-11-05 02:25:16  产品：PetPilot（/Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot）
+verify.sh 自检  2026-11-05 03:40:23  产品：PetPilot（/Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot）
 
 ================ 1. mock 自动化测试 ================
-............................                                             [100%]
-28 passed in 0.41s
+...............................                                          [100%]
+31 passed in 0.74s
 
  RUN  v5.1.0 /Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot/frontend
 
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
-   Start at  02:25:17
-   Duration  380ms (environment 60%, tests 15%, import 14%, setup 8%, transform 3%, worker 1%)
+   Start at  03:40:25
+   Duration  883ms (environment 56%, tests 15%, import 13%, setup 8%, transform 7%, worker 1%)
 
-结果：通过（28/28）；前端测试通过
+结果：通过（31/31）；前端测试通过
 
 ================ 2. 密钥排除（扫描整个仓库会进 git 的文件，以及本产品的构建产物） ================
 通过：没有 .env 文件被 git 跟踪。
@@ -30,33 +30,33 @@ INFO  [alembic.runtime.migration] Running upgrade 001 -> 002, add corrections, r
 INFO  [alembic.runtime.migration] Running upgrade 002 -> 003, add weekly_reviews
 INFO  [alembic.runtime.migration] Running upgrade 003 -> 004, add held_segment fields + stale flags
 2. 起服务（端口 8010）
-INFO:     Started server process [87289]
+INFO:     Started server process [94592]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
-INFO:     127.0.0.1:59417 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64500 - "POST /api/auth/login HTTP/1.1" 200 OK
 3. 登录并写入带唯一标记的猫
-INFO:     127.0.0.1:59418 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59419 - "POST /api/pets HTTP/1.1" 201 Created
+INFO:     127.0.0.1:64502 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64504 - "POST /api/pets HTTP/1.1" 201 Created
 4. 杀掉服务并确认退出
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [87289]
+INFO:     Finished server process [94592]
 5. 再起服务，按名字读回比对
-INFO:     Started server process [87298]
+INFO:     Started server process [94604]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
-INFO:     127.0.0.1:59421 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59422 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59423 - "GET /api/pets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64511 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64512 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64515 - "GET /api/pets HTTP/1.1" 200 OK
 6. 结果比对：yes
 通过：重启后数据仍在
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [87298]
+INFO:     Finished server process [94604]
 结果：通过
 
 ================ 4. 前端类型检查 / Lint / 生产构建 ================
@@ -76,10 +76,10 @@ transforming...
 rendering chunks...
 computing gzip size...
 dist/index.html                   0.45 kB │ gzip:  0.29 kB
-dist/assets/index-B9Yvm_1g.css   15.05 kB │ gzip:  3.84 kB
-dist/assets/index-CQ7US26D.js   239.94 kB │ gzip: 75.27 kB
+dist/assets/index-uq62gbno.css   15.06 kB │ gzip:  3.84 kB
+dist/assets/index-nI_5M7D1.js   240.37 kB │ gzip: 75.38 kB
 
-✓ built in 83ms
+✓ built in 148ms
 结果：通过
 
 ================ 5. 文件齐全与位置（AGENTS.md 第 7 节的产出清单；根目录不放产品文件） ================
@@ -94,7 +94,7 @@ dist/assets/index-CQ7US26D.js   239.94 kB │ gzip: 75.27 kB
 结果：通过
 
 ================ 汇总（抄进是否表的就是这五行） ================
-是否表第 2 项  mock 测试：      通过（28/28）；前端测试通过
+是否表第 2 项  mock 测试：      通过（31/31）；前端测试通过
 是否表第 4 项  前端检查与构建： 通过
 是否表第 5 项  密钥排除：       通过
 是否表第 6 项  重启后数据恢复： 通过
