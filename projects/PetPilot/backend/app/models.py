@@ -117,3 +117,14 @@ class Photo(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class WeeklyReview(Base):
+    __tablename__ = "weekly_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"))
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    fact_ids: Mapped[list] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

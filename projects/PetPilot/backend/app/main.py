@@ -5,7 +5,7 @@ from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, care, facts, messages, pets, photos, reminders
+from app.api import auth, care, facts, messages, pets, photos, reminders, weekly
 
 app = FastAPI(title="PetPilot")
 
@@ -16,6 +16,7 @@ app.include_router(facts.router, prefix="/api")
 app.include_router(reminders.router, prefix="/api")
 app.include_router(photos.router, prefix="/api")
 app.include_router(care.router, prefix="/api")
+app.include_router(weekly.router, prefix="/api")
 
 
 @app.exception_handler(HTTPException)
