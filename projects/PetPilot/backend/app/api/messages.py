@@ -286,9 +286,16 @@ def send_message(
 
     # 5) 就医摘要
     care_results = []
+    unattributed_care = False
     for cr in dialogue.get("care_requests", []):
         pid = cr.get("pet_id")
-        if pid not in allowed_ids:
+        mentioned = [p for p in pets if mention_count(p.name, text) >= 1]
+        if pid in allowed_ids and pid in {p.id for p in mentioned}:
+            pass  # 明确提到，信任
+        elif len(mentioned) == 1:
+            pid = mentioned[0].id  # 明确表达优先
+        else:
+            unattributed_care = True  # 未指定猫，不猜，稍后追问
             continue
         fact_ids = cr.get("fact_ids") or []
         if fact_ids:
@@ -320,10 +327,19 @@ def send_message(
             parts.append(f"{resolved_reminder_count} 个提醒")
         answer = f"好的，已把 {'、'.join(parts)} 归到「{clarified_pet.name}」。"
     else:
+        followups = []
         # 问题1：有未指定猫的提醒时，追问是哪只猫
         if any(rm.get("pet_name") is None for rm in reminder_results):
-            followup = "另外，有提醒还没指定是哪只猫，请问是给谁？若暂时不确定，可以稍后到「提醒」页手动选择。"
-            answer = f"{answer}\n{followup}" if answer else followup
+            followups.append("有提醒还没指定是哪只猫，请问是给谁？")
+        # 挂起片段：追问是哪只猫
+        if helds:
+            followups.append(f"有 {len(helds)} 条记录还不确定是哪只猫，请告诉我是哪只猫的。")
+        # 就医摘要：未指定猫，追问
+        if unattributed_care:
+            followups.append("请问是整理哪只猫的就医摘要？")
+            answer = ""  # 模型猜猫的回复不可信，清空
+        if followups:
+            answer = (answer + "\n" if answer else "") + "另外，" + "；".join(followups) + "（若暂时不确定，可稍后到相应页面处理。）"
 
     receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(resolved_facts))
     assistant_text = receipt
