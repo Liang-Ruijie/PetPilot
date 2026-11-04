@@ -311,14 +311,19 @@ def send_message(
     answer = _extract_text(dialogue.get("answer"))
     explanation = _extract_text(dialogue.get("explanation"))
 
-    # 问题1：有未指定猫的提醒时，追问是哪只猫
-    if any(rm.get("pet_name") is None for rm in reminder_results):
-        followup = "另外，有提醒还没指定是哪只猫，请问是给谁？若暂时不确定，可以稍后到「提醒」页手动选择。"
-        answer = f"{answer}\n{followup}" if answer else followup
-
-    if resolved_reminder_count and clarified_pet:
-        note = f"已把 {resolved_reminder_count} 个提醒归到「{clarified_pet.name}」。"
-        answer = f"{answer}\n{note}" if answer else note
+    if clarified_pet and (resolved_facts or resolved_reminder_count):
+        # 澄清归属：用确定性回复替换模型的笨拙回答，不再追问“做什么”
+        parts = []
+        if resolved_facts:
+            parts.append(f"{len(resolved_facts)} 条挂起记录")
+        if resolved_reminder_count:
+            parts.append(f"{resolved_reminder_count} 个提醒")
+        answer = f"好的，已把 {'、'.join(parts)} 归到「{clarified_pet.name}」。"
+    else:
+        # 问题1：有未指定猫的提醒时，追问是哪只猫
+        if any(rm.get("pet_name") is None for rm in reminder_results):
+            followup = "另外，有提醒还没指定是哪只猫，请问是给谁？若暂时不确定，可以稍后到「提醒」页手动选择。"
+            answer = f"{answer}\n{followup}" if answer else followup
 
     receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(resolved_facts))
     assistant_text = receipt
