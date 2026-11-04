@@ -19,10 +19,11 @@ SYSTEM_PROMPT = """你是宠物合伙人 Personal Agent，服务猫主人的持�
 ## 输出 Schema
 
 operations 数组（每个 operation 必须是对象，必须带 kind 字段）：
-kind 有三种取值：
+kind 有四种取值：
 - add_observation：新增观察（归档到某只猫），字段：kind, op_id, quote, pet_id, topic, value, unit, quantity_scope, historical_current, occurred_at, polarity, change_kind
 - correct_fact：纠错（更新已有事实），字段：kind, op_id, quote, fact_id, expected_version, pet_id, topic, value, unit
 - hold_segment：归属未知挂起，字段：kind, op_id, quote, reason, topic, value, unit, quantity_scope, historical_current, polarity（保留原文已明确的数值/单位等信息，供补归属时重建）
+- resolve_held：主人澄清了之前挂起片段的归属（如「他指的是明月」），字段：kind, op_id, quote, held_id, pet_id；held_id 从「待归属片段」列表里选，pet_id 是被澄清的那只猫
 
 dialogue 对象（可选字段）：
 - answer：自然回答（对象 {"text":"..."} 或字符串）
@@ -46,7 +47,8 @@ dialogue 对象（可选字段）：
 8. 就医准备（dialogue.care_requests）：主人要求「整理就医摘要、先不要发」才输出，fact_ids 只能引用本猫可见事实；绝不发送或选择医院。
 9. 照片只作为「原图+主人描述」保存，你不自动理解图片内容。
 10. 你不得写「已保存/已记录/已整理/已安排/已发送」等动作结果——成功结果由服务器验证后另行反馈。
-11. 一票阻断红线：跨猫泄露、编造数值、假保存、药量自主建议。"""
+11. 一票阻断红线：跨猫泄露、编造数值、假保存、药量自主建议。
+12. 当主人澄清之前挂起片段属于某只猫（如「他指的是明月」「那是贝塔的」），输出 resolve_held 引用对应的 held_id + pet_id，不要重复新建观察。"""
 
 
 class ModelClient:
@@ -63,7 +65,7 @@ class ModelClient:
             )
 
     @staticmethod
-    def _build_user(text: str, pets, facts=None) -> str:
+    def _build_user(text: str, pets, facts=None, held=None) -> str:
         lines = []
         if pets:
             lines.append("允许的宠物身份：")
@@ -79,15 +81,23 @@ class ModelClient:
                 lines.append(
                     f"- fact_id={f['id']}, {f['pet_name']}, {f.get('topic') or '记录'} {v}, version={f['version']}, 出处={f['quote']!r}"
                 )
+        if held:
+            lines.append("")
+            lines.append("待归属片段（主人可能澄清属于哪只猫）：")
+            for h in held:
+                v = f"{h.get('value')}{h.get('unit') or ''}" if h.get("value") is not None else ""
+                lines.append(
+                    f"- held_id={h['id']}, quote={h['quote']!r}, topic={h.get('topic') or '记录'} {v}"
+                )
         lines.append("")
         lines.append(f"主人消息：{text}")
         return "\n".join(lines)
 
-    def extract(self, text: str, pets, facts=None) -> dict:
+    def extract(self, text: str, pets, facts=None, held=None) -> dict:
         if self.client is None:
             return self._mock(text)
 
-        user_msg = self._build_user(text, pets, facts)
+        user_msg = self._build_user(text, pets, facts, held)
         last_err: Exception | None = None
         for attempt in range(2):
             try:

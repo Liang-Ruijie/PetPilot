@@ -5,7 +5,7 @@ def test_weekly_review_generated(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None: {
+        lambda self, t, pets, facts=None, held=None: {
             "operations": [{"kind": "add_observation", "quote": "明月今天吃了20克", "pet_id": 1, "topic": "进食", "value": 20, "unit": "克"}],
             "dialogue": {},
         },

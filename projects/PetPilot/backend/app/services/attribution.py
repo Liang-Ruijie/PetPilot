@@ -75,6 +75,7 @@ def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
     adds: list[dict] = []
     holds: list[dict] = []
     corrections: list[dict] = []
+    resolves: list[dict] = []
 
     for op in operations:
         kind = op.get("kind") or "add_observation"  # 宽容：模型缺 kind 默认按 add_observation 处理
@@ -122,5 +123,12 @@ def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
                 "unit": op.get("unit"),
                 "quote": quote,
             })
+        elif kind == "resolve_held":
+            quote = (op.get("quote") or "").strip()
+            held_id = op.get("held_id")
+            pet_id = op.get("pet_id")
+            if held_id is None or pet_id not in allowed:
+                continue
+            resolves.append({"held_id": held_id, "pet_id": pet_id, "quote": quote})
 
-    return adds, holds, corrections
+    return adds, holds, corrections, resolves

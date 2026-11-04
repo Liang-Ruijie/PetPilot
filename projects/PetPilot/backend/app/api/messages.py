@@ -20,10 +20,12 @@ def _extract_text(val):
     return ""
 
 
-def _receipt(facts, held, corrections, reminders, cares) -> str:
+def _receipt(facts, held, corrections, reminders, cares, resolved=0) -> str:
     parts = []
     if facts:
         parts.append(f"已保存 {len(facts)} 条记录")
+    if resolved:
+        parts.append(f"已把 {resolved} 条挂起记录归到对应猫")
     if corrections:
         parts.append(f"已纠错 {len(corrections)} 条")
     if reminders:
@@ -65,8 +67,13 @@ def send_message(
         for f in recent_facts
     ]
 
+    held_context = [
+        {"id": h.id, "quote": h.quote, "topic": h.topic, "value": h.value, "unit": h.unit}
+        for h in db.query(HeldSegment).filter(HeldSegment.status == "pending").all()
+    ]
+
     try:
-        raw = ModelClient().extract(text, pets, facts_context)
+        raw = ModelClient().extract(text, pets, facts_context, held_context)
     except SchemaError as e:
         raise HTTPException(
             502, detail={"error": {"code": "SCHEMA_INVALID", "message": str(e)}}
@@ -76,8 +83,15 @@ def send_message(
             502, detail={"error": {"code": "MODEL_FAILED", "message": str(e)}}
         )
 
-    adds, holds, corrections = resolve_operations(raw.get("operations", []), text, pets)
+    adds, holds, corrections, resolves = resolve_operations(raw.get("operations", []), text, pets)
     dialogue = raw.get("dialogue") or {}
+
+    # 确定性补归属：主人澄清“他指的是X” / “是X的”
+    clarified_pet = None
+    for pet in pets:
+        if f"指的是{pet.name}" in text or f"是{pet.name}的" in text:
+            clarified_pet = pet
+            break
 
     msg = Message(role="user", content=text)
     db.add(msg)
@@ -103,24 +117,25 @@ def send_message(
         db.add(fact)
         facts.append(fact)
 
-    # 2) 挂起
+    # 2) 挂起（澄清消息本身不再挂起）
     helds = []
-    for op in holds:
-        hs = HeldSegment(
-            message_id=msg.id,
-            quote=op.get("quote") or "",
-            topic=op.get("topic"),
-            reason="归属未知",
-            value=op.get("value"),
-            unit=op.get("unit"),
-            quantity_scope=op.get("quantity_scope"),
-            historical_current=op.get("historical_current"),
-            occurred_at=op.get("occurred_at"),
-            polarity=op.get("polarity"),
-            status="pending",
-        )
-        db.add(hs)
-        helds.append(hs)
+    if not clarified_pet:
+        for op in holds:
+            hs = HeldSegment(
+                message_id=msg.id,
+                quote=op.get("quote") or "",
+                topic=op.get("topic"),
+                reason="归属未知",
+                value=op.get("value"),
+                unit=op.get("unit"),
+                quantity_scope=op.get("quantity_scope"),
+                historical_current=op.get("historical_current"),
+                occurred_at=op.get("occurred_at"),
+                polarity=op.get("polarity"),
+                status="pending",
+            )
+            db.add(hs)
+            helds.append(hs)
 
     db.flush()
 
@@ -167,6 +182,55 @@ def send_message(
         correction_results.append(
             {"fact_id": fact.id, "pet_id": fact.pet_id, "new_value": new_value, "version": fact.version, "status": "ok"}
         )
+
+    # 3.5) 补归属：主人澄清了之前挂起片段属于哪只猫
+    resolved_facts = []
+    for rv in resolves:
+        h = db.query(HeldSegment).filter(
+            HeldSegment.id == rv["held_id"], HeldSegment.status == "pending"
+        ).first()
+        if not h:
+            continue
+        f = Fact(
+            pet_id=rv["pet_id"],
+            topic=h.topic,
+            value=h.value,
+            unit=h.unit,
+            quantity_scope=h.quantity_scope,
+            historical_current=h.historical_current,
+            occurred_at=h.occurred_at,
+            polarity=h.polarity,
+            change_kind="new",
+            source_message_id=h.message_id,
+            quote=h.quote,
+            version=1,
+        )
+        db.add(f)
+        h.status = "resolved"
+        h.resolved_pet_id = rv["pet_id"]
+        resolved_facts.append(f)
+
+    # 确定性补归属：澄清“他指的是X” → 把仍挂起的片段归到 X
+    if clarified_pet:
+        for h in db.query(HeldSegment).filter(HeldSegment.status == "pending").all():
+            f = Fact(
+                pet_id=clarified_pet.id,
+                topic=h.topic,
+                value=h.value,
+                unit=h.unit,
+                quantity_scope=h.quantity_scope,
+                historical_current=h.historical_current,
+                occurred_at=h.occurred_at,
+                polarity=h.polarity,
+                change_kind="new",
+                source_message_id=h.message_id,
+                quote=h.quote,
+                version=1,
+            )
+            db.add(f)
+            h.status = "resolved"
+            h.resolved_pet_id = clarified_pet.id
+            resolved_facts.append(f)
 
     # 4) 提醒
     reminder_results = []
@@ -224,7 +288,12 @@ def send_message(
     answer = _extract_text(dialogue.get("answer"))
     explanation = _extract_text(dialogue.get("explanation"))
 
-    receipt = _receipt(facts, helds, correction_results, reminder_results, care_results)
+    # 问题1：有未指定猫的提醒时，追问是哪只猫
+    if any(rm.get("pet_name") is None for rm in reminder_results):
+        followup = "另外，有提醒还没指定是哪只猫，请问是给谁？若暂时不确定，可以稍后到「提醒」页手动选择。"
+        answer = f"{answer}\n{followup}" if answer else followup
+
+    receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(resolved_facts))
     assistant_text = receipt
     if answer:
         assistant_text = f"{receipt}\n{answer}"
@@ -244,7 +313,7 @@ def send_message(
                 "quote": f.quote,
                 "version": f.version,
             }
-            for f in facts
+            for f in facts + resolved_facts
         ],
         "held_segments": [
             {"id": h.id, "quote": h.quote, "reason": h.reason} for h in helds
