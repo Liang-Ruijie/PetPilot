@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* PetPilot MVP 视觉规范 设计变量 */
+  --color-canvas: #fcfcfd;
+  --color-surface: #ffffff;
+  --color-subtle: #f4f5f7;
+  --color-ink: #202124;
+  --color-secondary: #606771;
+  --color-muted: #737b86;
+  --color-line: #e4e7ec;
+  --color-control-line: #8a919c;
+  --color-accent: #315bd6;
+  --color-accent-hover: #2548b5;
+  --color-user-bg: #edf2ff;
+  --color-user-text: #24469e;
+  --color-success: #216e4e;
+  --color-success-bg: #eff8f3;
+  --color-warning: #855400;
+  --color-warning-bg: #fff8e8;
+  --color-danger: #b42318;
+  --color-danger-bg: #fff3f1;
+
+  --radius-card: 16px;
+  --radius-bubble: 20px;
+  --radius-control: 12px;
+  --radius-composer: 26px;
+
+  --shadow-composer: 0 4px 20px rgba(24, 32, 48, 0.06);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

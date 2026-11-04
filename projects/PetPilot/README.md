@@ -6,33 +6,33 @@
 
 阶段 2-3（周回顾 + 收口）开发完成。详细进度见 `docs/项目状态.md`。
 
-## 启动方法（本机，一条命令）
+## 启动方法（本机）
+
+后端（端口 8001）：
 
 ```bash
-# 首次：装依赖（Python 3.12）
-cd backend
-/Users/liang/.local/bin/python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 每次启动：迁移数据库 + 起服务
-bash backend/run.sh
+cd backend && bash run.sh
 ```
 
-打开浏览器访问 `http://localhost:8001/`，验证码固定 `123456`。（端口 8000 被其他项目占用，PetPilot 默认用 8001，可用 `PORT=xxxx` 环境变量覆盖）
+前端（Vite，默认 5173，被占用会提示 5174 等）：
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+浏览器打开前端地址（如 http://localhost:5174/），验证码 `123456`。
 
 ## 验证方法
 
 ```bash
-# mock 自动化测试（离线，不调真实模型）
-cd backend && source .venv/bin/activate
-MODEL_API_KEY="" python -m pytest -q
+# 后端 mock 测试
+cd backend && source .venv/bin/activate && MODEL_API_KEY="" python -m pytest -q
 
-# 重启数据恢复检查
-bash scripts/restart-check.sh
+# 前端测试 / lint / 构建
+cd frontend && npm test -- --run && npm run lint && npm run build
 
 # 全套自检（在工具包根目录）
-./verify.sh PetPilot 阶段2-1
+./verify.sh PetPilot 阶段3-1
 ```
 
 ## 环境变量（backend/.env，从 .env.example 复制）
