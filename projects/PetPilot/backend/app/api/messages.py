@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -89,7 +91,11 @@ def send_message(
     # 确定性补归属：主人澄清“他指的是X” / “是X的”
     clarified_pet = None
     for pet in pets:
-        if f"指的是{pet.name}" in text or f"是{pet.name}的" in text:
+        if (
+            f"指的是{pet.name}" in text
+            or f"是{pet.name}的" in text
+            or re.search(f"[他它她]是{pet.name}", text)
+        ):
             clarified_pet = pet
             break
 
@@ -210,7 +216,8 @@ def send_message(
         h.resolved_pet_id = rv["pet_id"]
         resolved_facts.append(f)
 
-    # 确定性补归属：澄清“他指的是X” → 把仍挂起的片段归到 X
+    # 确定性补归属：澄清“他指的是X/他是X” → 把仍挂起的片段 + 待补对象的提醒归到 X
+    resolved_reminder_count = 0
     if clarified_pet:
         for h in db.query(HeldSegment).filter(HeldSegment.status == "pending").all():
             f = Fact(
@@ -231,13 +238,22 @@ def send_message(
             h.status = "resolved"
             h.resolved_pet_id = clarified_pet.id
             resolved_facts.append(f)
+        for rem in db.query(Reminder).filter(
+            Reminder.status == "pending", Reminder.pet_id.is_(None)
+        ).all():
+            rem.pet_id = clarified_pet.id
+            resolved_reminder_count += 1
 
     # 4) 提醒
     reminder_results = []
+    seen_reminder_quotes = set()
     for r in dialogue.get("reminders", []):
         quote = (r.get("quote") or "").strip()
         if not quote or quote not in text:
             continue
+        if quote in seen_reminder_quotes:
+            continue  # 去重：模型重复输出
+        seen_reminder_quotes.add(quote)
         if not is_authorized_reminder(quote):
             continue  # 否定/假设/问句/引用不算授权
         due = parse_due_time(quote)
@@ -292,6 +308,10 @@ def send_message(
     if any(rm.get("pet_name") is None for rm in reminder_results):
         followup = "另外，有提醒还没指定是哪只猫，请问是给谁？若暂时不确定，可以稍后到「提醒」页手动选择。"
         answer = f"{answer}\n{followup}" if answer else followup
+
+    if resolved_reminder_count and clarified_pet:
+        note = f"已把 {resolved_reminder_count} 个提醒归到「{clarified_pet.name}」。"
+        answer = f"{answer}\n{note}" if answer else note
 
     receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(resolved_facts))
     assistant_text = receipt

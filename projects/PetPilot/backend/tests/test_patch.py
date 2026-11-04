@@ -100,3 +100,28 @@ def test_resolve_held_by_clarification(client, auth, monkeypatch):
     data = r.json()
     assert any(f["pet_name"] == "明月" and f["topic"] == "状态" for f in data["facts"])
     assert client.get("/api/held", headers=auth).json()["held_segments"] == []
+
+
+def test_clarification_assigns_pending_reminder(client, auth, monkeypatch):
+    client.post("/api/pets", json={"name": "明月"}, headers=auth)
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+
+    # “明天称体重” → 提醒，待补对象
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None: {
+            "operations": [],
+            "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天称体重"}]},
+        },
+    )
+    r = client.post("/api/messages", json={"text": "明天称体重"}, headers=auth)
+    assert r.json()["reminders"][0]["pet_name"] is None
+
+    # 澄清“他是明月” → 待补对象的提醒归到明月
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None: {"operations": [], "dialogue": {}},
+    )
+    client.post("/api/messages", json={"text": "他是明月"}, headers=auth)
+    reminders = client.get("/api/reminders", headers=auth).json()["reminders"]
+    assert reminders[0]["pet_name"] == "明月"

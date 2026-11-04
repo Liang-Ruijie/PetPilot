@@ -43,7 +43,7 @@ dialogue 对象（可选字段）：
 4. quantity_scope 按原文动词判断：吃/喝/摄→intake，放/给/倒/盛→provided；缺失留空。
 5. 结构化字段能确定才填：value/unit 数值单位；historical_current「以前100克」=historical「今天20克」=current；occurred_at 有明确日期才填；change_kind 固定 new。
 6. 纠错（correct_fact）：目标唯一才输出，引用 fact_id + expected_version（从「最近记录」里找），quote 从明确宠物名字开始连续引用到新值，不拼接不改写；歧义用 hold_segment。
-7. 提醒（dialogue.reminders）：只有主人明确交代「提醒/几点」才输出；quote 必须是完整原话子句，不能截掉否定词；只有日期没有具体时间、或否定/引用/假设/问句，都不算授权，不要输出 reminders。
+7. 提醒（dialogue.reminders）：主人明确交代「提醒/几点」、或含未来时间的计划（如「明天称体重」「后天上午九点带去打针」）才输出；这类未来计划是提醒/任务，不输出 add_observation（add_observation 只用于已发生或当前状态的描述）。quote 必须是完整原话子句，不能截掉否定词；只有日期没有具体时间、或否定/引用/假设/问句，都不算授权，不要输出 reminders。
 8. 就医准备（dialogue.care_requests）：主人要求「整理就医摘要、先不要发」才输出，fact_ids 只能引用本猫可见事实；绝不发送或选择医院。
 9. 照片只作为「原图+主人描述」保存，你不自动理解图片内容。
 10. 你不得写「已保存/已记录/已整理/已安排/已发送」等动作结果——成功结果由服务器验证后另行反馈。
