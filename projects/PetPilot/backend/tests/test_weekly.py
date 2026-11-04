@@ -21,3 +21,19 @@ def test_weekly_review_empty(client, auth):
     r = client.post("/api/weekly-review", json={}, headers=auth)
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "WEEKLY_EMPTY"
+
+
+def test_weekly_review_includes_photos(client, auth):
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    r = client.post(
+        "/api/photos",
+        files={"file": ("cat.png", png, "image/png")},
+        data={"description": "贝塔吐毛球", "pet_id": "1"},
+        headers=auth,
+    )
+    assert r.status_code == 201
+    # 只有照片、没有文字事实，也能生成周回顾，且包含照片描述
+    r = client.post("/api/weekly-review", json={}, headers=auth)
+    assert r.status_code == 201
+    assert "吐毛球" in r.json()["summary"]

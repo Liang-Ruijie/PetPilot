@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import Fact, Pet, WeeklyReview
+from app.models import Fact, Pet, Photo, WeeklyReview
 from app.services.summary import generate_weekly_review
 
 router = APIRouter()
@@ -37,12 +37,18 @@ def create_weekly_review(
         title = "周回顾（全部猫）"
 
     facts = q.order_by(Fact.created_at.asc()).all()
-    if not facts:
+
+    photo_q = db.query(Photo).filter(Photo.created_at >= since)
+    if body.pet_id is not None:
+        photo_q = photo_q.filter(Photo.pet_id == body.pet_id)
+    photos = photo_q.order_by(Photo.created_at.asc()).all()
+
+    if not facts and not photos:
         raise HTTPException(
             409, detail={"error": {"code": "WEEKLY_EMPTY", "message": "近 7 天无记录，不生成周回顾"}}
         )
 
-    summary = generate_weekly_review(label, facts)
+    summary = generate_weekly_review(label, facts, photos)
     wr = WeeklyReview(
         pet_id=body.pet_id,
         title=title,

@@ -12,6 +12,11 @@ function token() {
   return localStorage.getItem('petpilot_token') || ''
 }
 
+function handleAuthError() {
+  localStorage.removeItem('petpilot_token')
+  window.dispatchEvent(new Event('petpilot-auth-expired'))
+}
+
 export async function api(path: string, opts: RequestInit = {}) {
   const r = await fetch(API + path, {
     ...opts,
@@ -22,7 +27,11 @@ export async function api(path: string, opts: RequestInit = {}) {
     },
   })
   const data = await r.json().catch(() => ({}))
-  if (!r.ok) throw data.error || { code: 'HTTP_ERROR', message: r.statusText }
+  if (!r.ok) {
+    const err = data.error || { code: 'HTTP_ERROR', message: r.statusText }
+    if (err.code === 'AUTH_REQUIRED') handleAuthError()
+    throw err
+  }
   return data
 }
 
@@ -33,6 +42,10 @@ export async function apiForm(path: string, form: FormData) {
     body: form,
   })
   const data = await r.json().catch(() => ({}))
-  if (!r.ok) throw data.error || { code: 'HTTP_ERROR', message: r.statusText }
+  if (!r.ok) {
+    const err = data.error || { code: 'HTTP_ERROR', message: r.statusText }
+    if (err.code === 'AUTH_REQUIRED') handleAuthError()
+    throw err
+  }
   return data
 }

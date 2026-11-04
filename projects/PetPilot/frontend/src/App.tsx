@@ -102,6 +102,7 @@ function App() {
   const [cares, setCares] = useState<CareSummary[]>([])
   const [weeklies, setWeeklies] = useState<WeeklyReview[]>([])
   const [text, setText] = useState('')
+  const [photoPetId, setPhotoPetId] = useState<number | ''>('')
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -120,6 +121,12 @@ function App() {
   useEffect(() => {
     if (authed) load()
   }, [authed, load])
+
+  useEffect(() => {
+    const onExpired = () => setAuthed(false)
+    window.addEventListener('petpilot-auth-expired', onExpired)
+    return () => window.removeEventListener('petpilot-auth-expired', onExpired)
+  }, [])
 
   async function refresh(view: View) {
     try {
@@ -140,8 +147,12 @@ function App() {
   async function addPet() {
     const name = prompt('新猫的名字')
     if (!name) return
-    await api('/pets', { method: 'POST', body: JSON.stringify({ name }) })
-    load()
+    try {
+      await api('/pets', { method: 'POST', body: JSON.stringify({ name }) })
+      load()
+    } catch (e: unknown) {
+      setErr((e as { message?: string }).message || '建猫失败')
+    }
   }
 
   async function send() {
@@ -175,6 +186,7 @@ function App() {
       const fd = new FormData()
       fd.append('file', f)
       fd.append('description', desc)
+      if (photoPetId !== '') fd.append('pet_id', String(photoPetId))
       await apiForm('/photos', fd)
       refresh('photos')
     } catch (err2: unknown) {
@@ -313,8 +325,20 @@ function App() {
         {view === 'photos' && (
           <div>
             <SectionTitle title="照片" onClose={() => setView('chat')} />
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
-            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">上传照片</button>
+            <div className="flex items-center gap-2 mb-4">
+              <select
+                value={photoPetId}
+                onChange={(e) => setPhotoPetId(e.target.value === '' ? '' : Number(e.target.value))}
+                className="h-[40px] px-3 rounded-control border border-line bg-surface text-[14px] text-ink"
+              >
+                <option value="">不指定猫</option>
+                {pets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
+              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">上传照片</button>
+            </div>
             <div className="mt-4 space-y-2">
               {photos.length === 0 ? (
                 <p className="text-[15px] text-secondary">暂无照片。</p>
