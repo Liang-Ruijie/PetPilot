@@ -94,10 +94,12 @@ def send_message(
         if (
             f"指的是{pet.name}" in text
             or f"是{pet.name}的" in text
+            or f"是给{pet.name}" in text
+            or f"给{pet.name}的" in text
+            or f"归到{pet.name}" in text
             or re.search(f"[他它她]是{pet.name}", text)
         ):
-            clarified_pet = pet
-            break
+            clarified_pet = pet  # 不 break：口误更正时最后提到的猫优先
 
     msg = Message(role="user", content=text)
     db.add(msg)
@@ -191,12 +193,16 @@ def send_message(
 
     # 3.5) 补归属：主人澄清了之前挂起片段属于哪只猫
     resolved_facts = []
+    resolved_held_ids = set()
     for rv in resolves:
+        if rv["held_id"] in resolved_held_ids:
+            continue
         h = db.query(HeldSegment).filter(
             HeldSegment.id == rv["held_id"], HeldSegment.status == "pending"
         ).first()
         if not h:
             continue
+        resolved_held_ids.add(rv["held_id"])
         f = Fact(
             pet_id=rv["pet_id"],
             topic=h.topic,
@@ -215,6 +221,7 @@ def send_message(
         h.status = "resolved"
         h.resolved_pet_id = rv["pet_id"]
         resolved_facts.append(f)
+    db.flush()  # 关键：把已解决的挂起状态刷到库，避免下面确定性规则重复归因
 
     # 确定性补归属：澄清“他指的是X/他是X” → 把仍挂起的片段 + 待补对象的提醒归到 X
     resolved_reminder_count = 0
