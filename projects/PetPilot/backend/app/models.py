@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -63,4 +63,57 @@ class HeldSegment(Base):
     reason: Mapped[str] = mapped_column(String(50), default="归属未知")
     resolved_pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"))
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Correction(Base):
+    __tablename__ = "corrections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    fact_id: Mapped[int] = mapped_column(ForeignKey("facts.id"), nullable=False)
+    old_value: Mapped[float | None] = mapped_column(Float)
+    new_value: Mapped[float | None] = mapped_column(Float)
+    old_topic: Mapped[str | None] = mapped_column(String(50))
+    new_topic: Mapped[str | None] = mapped_column(String(50))
+    quote: Mapped[str] = mapped_column(Text, nullable=False)
+    source_message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"))
+    quote: Mapped[str] = mapped_column(Text, nullable=False)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class CareSummary(Base):
+    __tablename__ = "care_summaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    fact_ids: Mapped[list] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    source_message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Photo(Base):
+    __tablename__ = "photos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"))
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

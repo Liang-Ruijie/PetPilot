@@ -26,7 +26,7 @@ def test_single_attribution(client, auth, monkeypatch):
     text = "明月今天吃了26克"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {"operations": [_add(pet_id=1, quote=text)], "dialogue": {}},
+        lambda self, t, pets, facts=None: {"operations": [_add(pet_id=1, quote=text)], "dialogue": {}},
     )
     r = client.post("/api/messages", json={"text": text}, headers=auth)
     assert r.status_code == 200
@@ -42,7 +42,7 @@ def test_multi_pet_split(client, auth, monkeypatch):
     text = "明月今天吃了26克，贝塔有点拉稀"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {
+        lambda self, t, pets, facts=None: {
             "operations": [
                 _add("a", 1, "进食", 26, "克", "明月今天吃了26克"),
                 _add("b", 2, "状态", None, None, "贝塔有点拉稀"),
@@ -61,7 +61,7 @@ def test_invalid_pet_id_reattributed(client, auth, monkeypatch):
     text = "明月今天吃了26克"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {"operations": [_add(pet_id=999, quote=text)], "dialogue": {}},
+        lambda self, t, pets, facts=None: {"operations": [_add(pet_id=999, quote=text)], "dialogue": {}},
     )
     r = client.post("/api/messages", json={"text": text}, headers=auth)
     data = r.json()
@@ -74,7 +74,7 @@ def test_hold_segment(client, auth, monkeypatch):
     text = "贝塔2有点拉稀"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {"operations": [_hold(quote=text)], "dialogue": {}},
+        lambda self, t, pets, facts=None: {"operations": [_hold(quote=text)], "dialogue": {}},
     )
     r = client.post("/api/messages", json={"text": text}, headers=auth)
     data = r.json()
@@ -88,7 +88,7 @@ def test_near_miss_name_held(client, auth, monkeypatch):
     text = "贝塔2 有点拉稀"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {
+        lambda self, t, pets, facts=None: {
             "operations": [{"kind": "add_observation", "quote": text, "pet_id": 1, "topic": "状态"}],
             "dialogue": {},
         },
@@ -104,7 +104,7 @@ def test_quote_invalid_dropped(client, auth, monkeypatch):
     text = "明月今天吃了26克"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {"operations": [_add(quote="不是原文的内容")], "dialogue": {}},
+        lambda self, t, pets, facts=None: {"operations": [_add(quote="不是原文的内容")], "dialogue": {}},
     )
     r = client.post("/api/messages", json={"text": text}, headers=auth)
     data = r.json()
@@ -114,7 +114,7 @@ def test_quote_invalid_dropped(client, auth, monkeypatch):
 def test_model_failure_no_fake_save(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
 
-    def boom(self, text, pets):
+    def boom(self, text, pets, facts=None):
         raise ModelError("超时")
 
     monkeypatch.setattr(ModelClient, "extract", boom)
@@ -132,7 +132,7 @@ def test_occurred_at_defaults_today(client, auth, monkeypatch):
     text = "明月今天吃了26克"
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets: {
+        lambda self, t, pets, facts=None: {
             "operations": [
                 {"kind": "add_observation", "quote": text, "pet_id": 1, "topic": "进食", "value": 26, "unit": "克"}
             ],

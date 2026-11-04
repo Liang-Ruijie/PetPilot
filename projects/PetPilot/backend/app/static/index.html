@@ -51,9 +51,17 @@
     <div style="margin-top:8px"><button onclick="send()">发送</button></div>
     <div id="result" style="margin-top:10px"></div>
     <div style="margin-top:12px">
+      <input type="file" id="photoFile" accept="image/*" style="width:auto">
+      <input id="photoDesc" placeholder="照片描述（可选）">
+      <button onclick="uploadPhoto()">上传照片</button>
+    </div>
+    <div style="margin-top:12px">
       <button class="ghost" onclick="loadHistory()">刷新历史</button>
       <button class="ghost" onclick="loadFacts()">查记录</button>
       <button class="ghost" onclick="loadHeld()">查挂起</button>
+      <button class="ghost" onclick="loadReminders()">查提醒</button>
+      <button class="ghost" onclick="loadPhotos()">查照片</button>
+      <button class="ghost" onclick="loadCare()">查摘要</button>
     </div>
     <div id="history" style="margin-top:10px"></div>
   </div>
@@ -68,9 +76,22 @@ function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) }
   }).then(async r => {
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw data.error || { code: 'HTTP_ERROR', message: r.statusText };
+    if (!r.ok) {
+      const err = data.error || { code: 'HTTP_ERROR', message: r.statusText };
+      if (err.code === 'AUTH_REQUIRED') {
+        token = ''; localStorage.removeItem('petpilot_token');
+        showLogin();
+        $('loginErr').textContent = '登录已失效，请重新登录';
+      }
+      throw err;
+    }
     return data;
   });
+}
+function showLogin() {
+  $('loginCard').style.display = 'block';
+  $('appCard').style.display = 'none';
+  $('chatCard').style.display = 'none';
 }
 function showApp() {
   $('loginCard').style.display = 'none';
@@ -103,6 +124,9 @@ async function send() {
     $('result').innerHTML =
       `<div class="fact"><b>回执：</b>${data.receipt}</div>` +
       data.facts.map(f => `<div class="fact">✅ 归档到「${f.pet_name}」：${f.topic || ''}${f.value != null ? ' ' + f.value : ''}${f.unit || ''}（出处：${f.quote}）</div>`).join('') +
+      data.corrections.map(c => `<div class="fact">✏️ ${c.status === 'conflict' ? '纠错冲突：' + c.message : '纠错 fact#' + c.fact_id + ' → 新值 ' + c.new_value + '（版本 ' + c.version + '）'}</div>`).join('') +
+      data.reminders.map(r => `<div class="fact">⏰ 提醒：${r.quote}${r.due_at ? '（' + r.due_at + '）' : '（待补时间）'}</div>`).join('') +
+      data.care_requests.map(c => `<div class="fact">📋 ${c.title}：<br><span class="msg assistant">${c.summary}</span></div>`).join('') +
       data.held_segments.map(h => `<div class="held">⚠️ 归属未知：${h.quote}</div>`).join('') +
       (data.answer ? `<div class="msg assistant">${data.answer}</div>` : '');
     $('text').value = ''; loadHistory();
@@ -120,7 +144,47 @@ async function loadHeld() {
   const data = await api('/held');
   $('history').innerHTML = data.held_segments.map(h => `<div class="held">⚠️ 归属未知：${h.quote}</div>`).join('') || '（暂无挂起）';
 }
-if (token) { showApp(); }
+async function loadReminders() {
+  const data = await api('/reminders');
+  $('history').innerHTML = data.reminders.map(r =>
+    `<div class="fact">⏰ ${r.pet_name ? '「'+r.pet_name+'」' : ''} ${r.quote}<br>到期：${r.due_at || '待补时间'}｜状态：${r.status}${r.is_due ? '（已到期）' : ''} <button class="ghost" onclick="remAction(${r.id},'complete')">完成</button><button class="ghost" onclick="remAction(${r.id},'pause')">暂停</button><button class="ghost" onclick="remAction(${r.id},'cancel')">取消</button></div>`
+  ).join('') || '（暂无提醒）';
+}
+async function remAction(id, action) {
+  await api(`/reminders/${id}/${action}`, { method: 'POST' });
+  loadReminders();
+}
+async function uploadPhoto() {
+  const file = $('photoFile').files[0]; if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('description', $('photoDesc').value);
+  const r = await fetch('/api/photos', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+  const data = await r.json();
+  if (!r.ok) { $('history').innerHTML = `<div class="err">${data.error.code}: ${data.error.message}</div>`; return; }
+  $('photoFile').value = ''; $('photoDesc').value = '';
+  loadPhotos();
+}
+async function loadPhotos() {
+  const data = await api('/photos');
+  $('history').innerHTML = data.photos.map(p => `<div class="fact">🖼️ ${p.pet_name ? '「'+p.pet_name+'」' : ''} ${p.filename}${p.description ? '：'+p.description : ''}</div>`).join('') || '（暂无照片）';
+}
+async function loadCare() {
+  const data = await api('/care-summaries');
+  $('history').innerHTML = data.care_summaries.map(c =>
+    `<div class="fact">📋 【${c.pet_name}】${c.title}<br><span class="msg assistant">${c.summary}</span><br><button class="ghost" onclick="simulateReply(${c.id})">模拟医院回复</button></div>`
+  ).join('') || '（暂无摘要）';
+}
+async function simulateReply(id) {
+  const data = await api(`/care-summaries/${id}/simulate-reply`, { method: 'POST' });
+  $('history').innerHTML = `<div class="held">${data.reply}</div>` + $('history').innerHTML;
+}
+if (token) {
+  (async () => {
+    try { await api('/pets'); showApp(); }
+    catch (e) { /* api() 已自动回到登录页 */ }
+  })();
+}
 </script>
 </body>
 </html>

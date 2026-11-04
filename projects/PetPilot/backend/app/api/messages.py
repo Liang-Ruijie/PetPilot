@@ -2,30 +2,37 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import Fact, HeldSegment, Message, Pet
+from app.models import CareSummary, Correction, Fact, HeldSegment, Message, Pet, Reminder
 from app.schemas import MessageIn, MessageResult
 from app.services.attribution import resolve_operations
 from app.services.model_client import ModelClient, ModelError, SchemaError
+from app.services.reminder_intent import is_authorized_reminder, parse_due_time
+from app.services.summary import generate_care_summary
 
 router = APIRouter()
 
 
-def _receipt(facts_count: int, held_count: int) -> str:
-    parts = []
-    if facts_count:
-        parts.append(f"已保存 {facts_count} 条记录")
-    if held_count:
-        parts.append(f"{held_count} 条记录归属未知，等待确认")
-    return "，".join(parts) if parts else "已收到（本次没有产生记录）"
-
-
 def _extract_text(val):
-    """宽容处理：模型可能把 answer/explanation 返回成字符串或对象。"""
     if isinstance(val, str):
         return val
     if isinstance(val, dict):
         return val.get("text", "")
     return ""
+
+
+def _receipt(facts, held, corrections, reminders, cares) -> str:
+    parts = []
+    if facts:
+        parts.append(f"已保存 {len(facts)} 条记录")
+    if corrections:
+        parts.append(f"已纠错 {len(corrections)} 条")
+    if reminders:
+        parts.append(f"已设 {len(reminders)} 个提醒")
+    if cares:
+        parts.append(f"已整理 {len(cares)} 份就医摘要")
+    if held:
+        parts.append(f"{len(held)} 条记录归属未知，等待确认")
+    return "，".join(parts) if parts else "已收到（本次没有产生记录）"
 
 
 @router.post("/messages", response_model=MessageResult)
@@ -41,9 +48,25 @@ def send_message(
         )
 
     pets = db.query(Pet).order_by(Pet.id).all()
+    pet_names = {p.id: p.name for p in pets}
+    allowed_ids = set(pet_names.keys())
+
+    recent_facts = db.query(Fact).order_by(Fact.id.desc()).limit(20).all()
+    facts_context = [
+        {
+            "id": f.id,
+            "pet_name": pet_names.get(f.pet_id, ""),
+            "topic": f.topic,
+            "value": f.value,
+            "unit": f.unit,
+            "quote": f.quote,
+            "version": f.version,
+        }
+        for f in recent_facts
+    ]
 
     try:
-        raw = ModelClient().extract(text, pets)
+        raw = ModelClient().extract(text, pets, facts_context)
     except SchemaError as e:
         raise HTTPException(
             502, detail={"error": {"code": "SCHEMA_INVALID", "message": str(e)}}
@@ -53,12 +76,14 @@ def send_message(
             502, detail={"error": {"code": "MODEL_FAILED", "message": str(e)}}
         )
 
-    adds, holds = resolve_operations(raw.get("operations", []), text, pets)
+    adds, holds, corrections = resolve_operations(raw.get("operations", []), text, pets)
+    dialogue = raw.get("dialogue") or {}
 
     msg = Message(role="user", content=text)
     db.add(msg)
     db.flush()
 
+    # 1) 新增观察
     facts = []
     for op in adds:
         fact = Fact(
@@ -78,6 +103,7 @@ def send_message(
         db.add(fact)
         facts.append(fact)
 
+    # 2) 挂起
     helds = []
     for op in holds:
         hs = HeldSegment(
@@ -90,20 +116,102 @@ def send_message(
         db.add(hs)
         helds.append(hs)
 
-    dialogue = raw.get("dialogue") or {}
+    db.flush()
+
+    # 3) 纠错
+    correction_results = []
+    for c in corrections:
+        fact = None
+        if c.get("fact_id") is not None:
+            fact = db.query(Fact).filter(Fact.id == c["fact_id"]).first()
+        if not fact:
+            continue
+        if c.get("expected_version") is not None and fact.version != c["expected_version"]:
+            correction_results.append(
+                {"fact_id": fact.id, "status": "conflict", "message": "版本冲突，未更新"}
+            )
+            continue
+        old_value, old_topic = fact.value, fact.topic
+        new_value = c["value"] if c.get("value") is not None else fact.value
+        new_topic = c.get("topic") or fact.topic
+        db.add(
+            Correction(
+                fact_id=fact.id,
+                old_value=old_value,
+                new_value=new_value,
+                old_topic=old_topic,
+                new_topic=new_topic,
+                quote=c.get("quote") or "",
+                source_message_id=msg.id,
+            )
+        )
+        fact.value = new_value
+        fact.topic = new_topic
+        if c.get("unit"):
+            fact.unit = c["unit"]
+        fact.quote = c.get("quote") or fact.quote
+        fact.version += 1
+        correction_results.append(
+            {"fact_id": fact.id, "pet_id": fact.pet_id, "new_value": new_value, "version": fact.version, "status": "ok"}
+        )
+
+    # 4) 提醒
+    reminder_results = []
+    for r in dialogue.get("reminders", []):
+        quote = (r.get("quote") or "").strip()
+        if not quote or quote not in text:
+            continue
+        if not is_authorized_reminder(quote):
+            continue  # 否定/假设/问句/引用不算授权
+        due = parse_due_time(quote)
+        pid = r.get("pet_id")
+        if pid not in allowed_ids:
+            pid = None
+        rem = Reminder(pet_id=pid, quote=quote, due_at=due, status="pending")
+        db.add(rem)
+        db.flush()
+        reminder_results.append({
+            "id": rem.id,
+            "pet_name": pet_names.get(rem.pet_id, "") if rem.pet_id else None,
+            "quote": quote,
+            "due_at": due.strftime("%Y-%m-%d %H:%M") if due else None,
+            "status": "pending",
+        })
+
+    # 5) 就医摘要
+    care_results = []
+    for cr in dialogue.get("care_requests", []):
+        pid = cr.get("pet_id")
+        if pid not in allowed_ids:
+            continue
+        fact_ids = cr.get("fact_ids") or []
+        if fact_ids:
+            sel_facts = db.query(Fact).filter(Fact.pet_id == pid, Fact.id.in_(fact_ids)).all()
+        else:
+            sel_facts = db.query(Fact).filter(Fact.pet_id == pid).order_by(Fact.id.desc()).limit(20).all()
+        title = cr.get("title") or f"{pet_names[pid]}就医准备"
+        summary_text = generate_care_summary(pet_names[pid], sel_facts)
+        cs = CareSummary(
+            pet_id=pid,
+            title=title,
+            fact_ids=[f.id for f in sel_facts],
+            summary=summary_text,
+            source_message_id=msg.id,
+        )
+        db.add(cs)
+        db.flush()
+        care_results.append({"id": cs.id, "pet_name": pet_names[pid], "title": title, "summary": summary_text})
+
     answer = _extract_text(dialogue.get("answer"))
     explanation = _extract_text(dialogue.get("explanation"))
 
-    db.flush()
-
-    receipt = _receipt(len(facts), len(helds))
+    receipt = _receipt(facts, helds, correction_results, reminder_results, care_results)
     assistant_text = receipt
     if answer:
         assistant_text = f"{receipt}\n{answer}"
     db.add(Message(role="assistant", content=assistant_text))
     db.commit()
 
-    pet_names = {p.id: p.name for p in pets}
     return {
         "message_id": msg.id,
         "facts": [
@@ -122,6 +230,9 @@ def send_message(
         "held_segments": [
             {"id": h.id, "quote": h.quote, "reason": h.reason} for h in helds
         ],
+        "corrections": correction_results,
+        "reminders": reminder_results,
+        "care_requests": care_results,
         "answer": answer,
         "explanation": explanation,
         "receipt": receipt,

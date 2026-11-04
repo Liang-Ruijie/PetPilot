@@ -54,12 +54,13 @@ def parse_occurred_date(s: str | None) -> date | None:
 
 
 def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
-    """服务端裁决：pet_id 必须整词匹配；quote 必须落在原文；明确表达优先。"""
+    """服务端裁决：pet_id 必须整词匹配；quote 必须落在原文；明确表达优先；纠错单独提取。"""
     allowed = {p.id: p for p in pets}
     mentioned = mentioned_pets(text, pets)
     mentioned_ids = {p.id for p in mentioned}
     adds: list[dict] = []
     holds: list[dict] = []
+    corrections: list[dict] = []
 
     for op in operations:
         kind = op.get("kind") or "add_observation"  # 宽容：模型缺 kind 默认按 add_observation 处理
@@ -88,5 +89,24 @@ def resolve_operations(operations: list[dict], text: str, pets: list[Pet]):
             if not is_valid_quote(quote, text):
                 continue
             holds.append({"quote": quote, "topic": op.get("topic")})
+        elif kind == "correct_fact":
+            quote = (op.get("quote") or "").strip()
+            if not is_valid_quote(quote, text):
+                continue
+            value = op.get("value")
+            if value is not None and not isinstance(value, (int, float)):
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    value = None
+            corrections.append({
+                "fact_id": op.get("fact_id"),
+                "expected_version": op.get("expected_version"),
+                "pet_id": op.get("pet_id"),
+                "topic": op.get("topic"),
+                "value": value,
+                "unit": op.get("unit"),
+                "quote": quote,
+            })
 
-    return adds, holds
+    return adds, holds, corrections

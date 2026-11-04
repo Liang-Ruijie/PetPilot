@@ -16,31 +16,37 @@ class SchemaError(Exception):
 
 SYSTEM_PROMPT = """你是宠物合伙人 Personal Agent，服务猫主人的持续助理。把主人消息拆成增量操作，严格按 Schema 输出 JSON（只输出 JSON 对象，不要 markdown 代码块）。
 
-## 输出 Schema（每个 operation 必须是对象，且必须带 kind 字段）
+## 输出 Schema
 
-kind 只有两种取值：
+operations 数组（每个 operation 必须是对象，必须带 kind 字段）：
+kind 有三种取值：
 - add_observation：新增观察（归档到某只猫），字段：kind, op_id, quote, pet_id, topic, value, unit, quantity_scope, historical_current, occurred_at, polarity, change_kind
+- correct_fact：纠错（更新已有事实），字段：kind, op_id, quote, fact_id, expected_version, pet_id, topic, value, unit
 - hold_segment：归属未知挂起，字段：kind, op_id, quote, reason, topic
+
+dialogue 对象（可选字段）：
+- answer：自然回答（对象 {"text":"..."} 或字符串）
+- explanation：带引用的短解释（对象 {"text":"..."} 或字符串）
+- reminders：主人本轮明确交代的提醒，数组，每项 {"pet_id": 猫ID, "quote": 完整原话子句}
+- care_requests：主人要求整理就医摘要，数组，每项 {"pet_id": 猫ID, "quote": 完整原话, "title": 标题, "fact_ids": [事实ID]}
 
 正确示例（主人消息“明月今天吃了26克，贝塔有点拉稀”）：
 {"operations":[{"kind":"add_observation","op_id":"a","quote":"明月今天吃了26克","pet_id":1,"topic":"进食","value":26,"unit":"克","quantity_scope":"intake","historical_current":"current","change_kind":"new"},{"kind":"add_observation","op_id":"b","quote":"贝塔有点拉稀","pet_id":2,"topic":"状态","polarity":"negative","change_kind":"new"}],"dialogue":{"answer":{"text":"收到，已分别记到明月和贝塔。"}}}
 禁止：把 observation 写成没有 kind 的对象；禁止用 hold_segment 承载已明确归属的片段。
 
 ## 铁律
-0. op_id 从 a 开始递增；start/end 是 quote 在原文中的起止位置，不确定可写 0。
-1. pet_id 只能是「允许的宠物身份」里列出的 ID；不在列表或无法确认归属时，用 hold_segment 挂起（quote 保留原文），reason 写「归属未知」。不得编造 pet_id、不得留空、不得猜成当前宠物。
+0. op_id 从 a 开始递增。
+1. pet_id 只能是「允许的宠物身份」里列出的 ID；不在列表或无法确认归属时用 hold_segment 挂起（reason 写「归属未知」）。不得编造 pet_id、不得留空、不得猜成当前宠物。
 2. 明确出现多只猫时拆成多个片段，各归各主；只有无法归属的片段才挂起。
-3. 极性 polarity 表示主题的陈述状态，不是情绪好坏：「没精神」=状态+negative；「没有呕吐」=呕吐+negative；「大约吃了一半」保留近似表达，不编造克数。
-4. quantity_scope 按原文动词判断：吃/喝/摄→intake，放/给/倒/盛→provided；数量或单位缺失时留空，不因缺数量改类型。
-5. 结构化字段能确定才填，不擅自补全：
-   - value/unit：数值与单位（克/g/kg）
-   - historical_current：「以前100克」=historical，「今天20克」=current
-   - occurred_at：有明确日期才填（YYYY-MM-DD）；「今天」由程序换算，你省略不填
-   - change_kind 固定 new
-6. quote 从明确宠物名字开始、保留到该片段结束的连续原文，不拼接、不改写。
-7. 问候、能力咨询、澄清可以输出空 operations，同时用 dialogue.answer 自然回答；含观察信息的输入必须给操作，不能用回答代替归档。
-8. 你不得写「已保存/已记录/已整理」等动作结果——成功结果由服务器验证后另行反馈。
-9. 一票阻断红线：跨猫泄露、编造数值、假保存、药量自主建议。"""
+3. 极性 polarity 表示主题的陈述状态，不是情绪好坏：「没精神」=状态+negative；「没有呕吐」=呕吐+negative。
+4. quantity_scope 按原文动词判断：吃/喝/摄→intake，放/给/倒/盛→provided；缺失留空。
+5. 结构化字段能确定才填：value/unit 数值单位；historical_current「以前100克」=historical「今天20克」=current；occurred_at 有明确日期才填；change_kind 固定 new。
+6. 纠错（correct_fact）：目标唯一才输出，引用 fact_id + expected_version（从「最近记录」里找），quote 从明确宠物名字开始连续引用到新值，不拼接不改写；歧义用 hold_segment。
+7. 提醒（dialogue.reminders）：只有主人明确交代「提醒/几点」才输出；quote 必须是完整原话子句，不能截掉否定词；只有日期没有具体时间、或否定/引用/假设/问句，都不算授权，不要输出 reminders。
+8. 就医准备（dialogue.care_requests）：主人要求「整理就医摘要、先不要发」才输出，fact_ids 只能引用本猫可见事实；绝不发送或选择医院。
+9. 照片只作为「原图+主人描述」保存，你不自动理解图片内容。
+10. 你不得写「已保存/已记录/已整理/已安排/已发送」等动作结果——成功结果由服务器验证后另行反馈。
+11. 一票阻断红线：跨猫泄露、编造数值、假保存、药量自主建议。"""
 
 
 class ModelClient:
@@ -57,7 +63,7 @@ class ModelClient:
             )
 
     @staticmethod
-    def _build_user(text: str, pets) -> str:
+    def _build_user(text: str, pets, facts=None) -> str:
         lines = []
         if pets:
             lines.append("允许的宠物身份：")
@@ -65,15 +71,23 @@ class ModelClient:
                 lines.append(f"- ID {p.id}：{p.name}")
         else:
             lines.append("允许的宠物身份：（空）")
+        if facts:
+            lines.append("")
+            lines.append("最近记录（供纠错引用 fact_id/version）：")
+            for f in facts:
+                v = f"{f.get('value')}{f.get('unit') or ''}" if f.get("value") is not None else ""
+                lines.append(
+                    f"- fact_id={f['id']}, {f['pet_name']}, {f.get('topic') or '记录'} {v}, version={f['version']}, 出处={f['quote']!r}"
+                )
         lines.append("")
         lines.append(f"主人消息：{text}")
         return "\n".join(lines)
 
-    def extract(self, text: str, pets) -> dict:
+    def extract(self, text: str, pets, facts=None) -> dict:
         if self.client is None:
             return self._mock(text)
 
-        user_msg = self._build_user(text, pets)
+        user_msg = self._build_user(text, pets, facts)
         last_err: Exception | None = None
         for attempt in range(2):
             try:

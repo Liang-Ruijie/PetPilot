@@ -46,9 +46,35 @@ class MessageResult(BaseModel):
     message_id: int
     facts: list[FactOut] = []
     held_segments: list[HeldOut] = []
+    corrections: list[dict] = []
+    reminders: list[dict] = []
+    care_requests: list[dict] = []
     answer: str = ""
     explanation: str = ""
     receipt: str = ""
+
+
+class ReminderOut(BaseModel):
+    id: int
+    pet_name: str | None = None
+    quote: str
+    due_at: str | None = None
+    status: str
+    is_due: bool = False
+
+
+class PhotoOut(BaseModel):
+    id: int
+    pet_name: str | None = None
+    filename: str
+    description: str = ""
+
+
+class CareSummaryOut(BaseModel):
+    id: int
+    pet_name: str
+    title: str
+    summary: str
 
 
 # ---------- 模型输出信封（宽松解析） ----------
