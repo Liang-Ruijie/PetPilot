@@ -113,7 +113,6 @@ function App() {
   const [err, setErr] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [micSupported, setMicSupported] = useState(false)
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
 
@@ -152,21 +151,24 @@ function App() {
     rec.onend = () => setListening(false)
     rec.onerror = () => {
       setListening(false)
-      setErr('语音识别失败，请用文字输入')
+      alert('语音识别失败（可能未授权麦克风或网络问题），请用文字输入')
     }
     recognitionRef.current = rec
-    setMicSupported(true)
   }, [])
 
   function startListening() {
     const rec = recognitionRef.current
-    if (!rec || listening) return
+    if (listening) return
+    if (!rec) {
+      alert('语音识别在当前环境不可用（需 HTTPS 或支持的浏览器），请用文字输入')
+      return
+    }
     try {
       setListening(true)
       rec.start()
     } catch {
       setListening(false)
-      setErr('语音识别不可用，请用文字输入')
+      alert('语音识别不可用，请用文字输入')
     }
   }
 
@@ -495,6 +497,13 @@ function App() {
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
           <div className="flex items-end gap-2 bg-surface border border-line rounded-composer shadow-composer p-1.5">
+            <button
+              onClick={startListening}
+              aria-label="语音输入"
+              className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
+            >
+              <Mic size={20} />
+            </button>
             <textarea
               ref={taRef}
               className="flex-1 bg-transparent px-3 py-2.5 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
@@ -509,15 +518,6 @@ function App() {
                 }
               }}
             />
-            {micSupported && (
-              <button
-                onClick={startListening}
-                aria-label="语音输入"
-                className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
-              >
-                <Mic size={20} />
-              </button>
-            )}
             <button
               onClick={send}
               disabled={sending || !text.trim()}

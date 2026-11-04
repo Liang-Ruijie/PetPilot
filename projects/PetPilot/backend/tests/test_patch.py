@@ -125,3 +125,25 @@ def test_clarification_assigns_pending_reminder(client, auth, monkeypatch):
     client.post("/api/messages", json={"text": "他是明月"}, headers=auth)
     reminders = client.get("/api/reminders", headers=auth).json()["reminders"]
     assert reminders[0]["pet_name"] == "明月"
+
+
+def test_care_intent_fallback_generates_summary(client, auth, monkeypatch):
+    client.post("/api/pets", json={"name": "明月"}, headers=auth)
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None: {
+            "operations": [{"kind": "add_observation", "quote": "今天他有点软便", "pet_id": 1, "topic": "状态"}],
+            "dialogue": {},
+        },
+    )
+    client.post("/api/messages", json={"text": "今天他有点软便"}, headers=auth)
+
+    # 主人说“整理吧”，但模型不输出 care_request → 确定性兜底生成
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None: {"operations": [], "dialogue": {}},
+    )
+    r = client.post("/api/messages", json={"text": "可以，你帮我整理吧"}, headers=auth)
+    data = r.json()
+    assert len(data["care_requests"]) == 1
+    assert data["care_requests"][0]["pet_name"] == "明月"

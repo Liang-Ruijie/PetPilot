@@ -315,6 +315,39 @@ def send_message(
         db.flush()
         care_results.append({"id": cs.id, "pet_name": pet_names[pid], "title": title, "summary": summary_text})
 
+    # 5.5) 确定性兜底：主人要求“整理摘要”但模型没输出 care_requests 时，按上下文推断猫并生成
+    care_intent = ("整理" in text) and ("好了" not in text)
+    if care_intent and not care_results:
+        target_pid = None
+        mentioned = [p for p in pets if mention_count(p.name, text) >= 1]
+        if len(mentioned) == 1:
+            target_pid = mentioned[0].id
+        elif len(pets) == 1:
+            target_pid = pets[0].id
+        else:
+            recent_ids = {f.pet_id for f in db.query(Fact).order_by(Fact.id.desc()).limit(10).all()}
+            if len(recent_ids) == 1:
+                target_pid = next(iter(recent_ids))
+        if target_pid is not None:
+            sel_facts = db.query(Fact).filter(Fact.pet_id == target_pid).order_by(Fact.id.desc()).limit(20).all()
+            if sel_facts:
+                summary_text = generate_care_summary(pet_names[target_pid], sel_facts)
+                cs = CareSummary(
+                    pet_id=target_pid,
+                    title=f"{pet_names[target_pid]}就医摘要",
+                    fact_ids=[f.id for f in sel_facts],
+                    summary=summary_text,
+                    source_message_id=msg.id,
+                )
+                db.add(cs)
+                db.flush()
+                care_results.append({"id": cs.id, "pet_name": pet_names[target_pid], "title": cs.title, "summary": summary_text})
+                unattributed_care = False
+            else:
+                unattributed_care = True
+        else:
+            unattributed_care = True
+
     answer = _extract_text(dialogue.get("answer"))
     explanation = _extract_text(dialogue.get("explanation"))
 
