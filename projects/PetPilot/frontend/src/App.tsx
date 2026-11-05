@@ -62,8 +62,8 @@ function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
       alive = false
     }
   }, [id])
-  if (!url) return <div className="w-14 h-14 bg-subtle rounded-control shrink-0" />
-  return <img src={url} alt="" onClick={onPreview} className="w-14 h-14 object-cover rounded-control cursor-zoom-in shrink-0" />
+  if (!url) return <div className="w-20 h-20 bg-subtle rounded-control shrink-0" />
+  return <img src={url} alt="" onClick={onPreview} className="w-20 h-20 object-cover rounded-control cursor-zoom-in shrink-0 border border-black/5" />
 }
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -142,7 +142,9 @@ function App() {
   const [err, setErr] = useState('')
   const [atBottom, setAtBottom] = useState(true)
   const [inputFocused, setInputFocused] = useState(false)
-  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null)
+  const [needsExpand, setNeedsExpand] = useState(false)
+  const [fullExpand, setFullExpand] = useState(false)
+  const [preview, setPreview] = useState<{ url: string; rect?: { top: number; left: number; width: number; height: number }; open: boolean } | null>(null)
 
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -355,6 +357,16 @@ function App() {
     if (expanded) taRef.current?.focus()
   }, [expanded])
 
+  // 输入框自适应高度：最多 5 行（120px），超出显示展开按钮
+  useEffect(() => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const h = el.scrollHeight
+    el.style.height = Math.min(h, 120) + 'px'
+    setNeedsExpand(h > 122)
+  }, [text, expanded, fullExpand])
+
   // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
   useEffect(() => {
     if (view === 'chat') {
@@ -368,10 +380,21 @@ function App() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
   }
 
+  function openPreview(url: string, el?: HTMLElement) {
+    const r = el?.getBoundingClientRect()
+    setPreview({ url, rect: r ? { top: r.top, left: r.left, width: r.width, height: r.height } : undefined, open: false })
+    requestAnimationFrame(() => requestAnimationFrame(() => setPreview((p) => (p ? { ...p, open: true } : p))))
+  }
+
+  function closePreview() {
+    setPreview((p) => (p ? { ...p, open: false } : p))
+    setTimeout(() => setPreview(null), 300)
+  }
+
   async function previewSentPhoto(id: number) {
     const token = localStorage.getItem('petpilot_token') || ''
     const r = await fetch(`/api/photos/${id}/file`, { headers: { Authorization: `Bearer ${token}` } })
-    if (r.ok) setPreviewPhoto(URL.createObjectURL(await r.blob()))
+    if (r.ok) openPreview(URL.createObjectURL(await r.blob()))
   }
 
   if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
@@ -415,10 +438,10 @@ function App() {
                 <div key={m.id} className="space-y-2">
                   {(m.photos && m.photos.length > 0) && (
                     <div className="flex justify-end">
-                      <div className="max-w-[85%] flex gap-2">
+                      <div className="max-w-[85%] flex gap-2 overflow-x-auto">
                         {m.photos.map((ph, i) => (
                           ph.url
-                            ? <img key={i} src={ph.url} alt="" onClick={() => setPreviewPhoto(ph.url!)} className="w-14 h-14 object-cover rounded-control cursor-zoom-in shrink-0" />
+                            ? <img key={i} src={ph.url} alt="" onClick={(e) => openPreview(ph.url!, e.currentTarget)} className="w-20 h-20 object-cover rounded-control cursor-zoom-in shrink-0 border border-black/5" />
                             : <PhotoImg key={i} id={ph.id} onPreview={() => previewSentPhoto(ph.id)} />
                         ))}
                       </div>
@@ -569,7 +592,7 @@ function App() {
           {!expanded ? (
             <div
               onClick={() => { setExpanded(true); setTimeout(() => taRef.current?.focus(), 0) }}
-              className="flex items-center gap-2 bg-surface border border-line rounded-composer shadow-composer p-1.5 cursor-text"
+              className="flex items-center gap-2 bg-surface rounded-composer shadow-composer p-1.5 cursor-text"
             >
               <button
                 onPointerDown={(e) => { e.preventDefault(); startListening() }}
@@ -591,12 +614,12 @@ function App() {
               </button>
             </div>
           ) : (
-            <div className="bg-surface border border-line rounded-composer shadow-composer p-2">
+            <div className="relative bg-surface rounded-composer shadow-composer p-2">
               {draftPhotos.length > 0 && (
                 <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
                     <div key={p.id} className="relative w-14 h-14 shrink-0">
-                      <img src={p.url} alt="" onClick={() => setPreviewPhoto(p.url)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
+                      <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
                       <button
                         onClick={() => removeDraftPhoto(p.id)}
                         aria-label="移除照片"
@@ -610,7 +633,7 @@ function App() {
               )}
               <textarea
                 ref={taRef}
-                className="w-full bg-transparent px-1 py-1 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
+                className={`w-full bg-transparent px-1 py-1 text-[16px] text-ink resize-none focus:outline-none ${needsExpand ? 'pr-12' : ''}`}
                 rows={1}
                 placeholder="说说今天的变化…"
                 value={text}
@@ -627,6 +650,9 @@ function App() {
                   }
                 }}
               />
+              {needsExpand && !fullExpand && (
+                <button onClick={() => setFullExpand(true)} className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded bg-subtle text-accent text-[12px]">展开</button>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   onPointerDown={(e) => { e.preventDefault(); startListening() }}
@@ -683,13 +709,41 @@ function App() {
         </button>
       )}
 
-      {previewPhoto && (
-        <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center" onClick={() => setPreviewPhoto(null)}>
-          <img src={previewPhoto} alt="" className="max-w-full max-h-full object-contain" />
+      {preview && (
+        <div
+          className={`fixed inset-0 z-[60] bg-black transition-opacity duration-300 ${preview.open ? 'opacity-100' : 'opacity-0'}`}
+          onClick={closePreview}
+        >
+          <img
+            src={preview.url}
+            alt=""
+            className="object-contain transition-all duration-300 ease-out"
+            style={
+              preview.rect && !preview.open
+                ? { position: 'fixed', top: preview.rect.top, left: preview.rect.left, width: preview.rect.width, height: preview.rect.height, borderRadius: 12 }
+                : { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', padding: 16 }
+            }
+          />
         </div>
       )}
 
-      <nav className={`bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around ${inputFocused ? 'hidden' : ''}`}>
+      {fullExpand && (
+        <div className="fixed inset-0 z-[55] bg-canvas flex flex-col">
+          <div className="flex items-center justify-between h-[56px] px-4 shrink-0">
+            <span className="text-[16px] text-ink">编辑</span>
+            <button onClick={() => setFullExpand(false)} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[14px]">收起</button>
+          </div>
+          <textarea
+            autoFocus
+            className="flex-1 w-full bg-transparent px-4 py-2 text-[16px] leading-[1.65] text-ink resize-none focus:outline-none"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="说说今天的变化…"
+          />
+        </div>
+      )}
+
+      <nav className={`bg-canvas pb-2 pt-2 shrink-0 flex justify-around ${inputFocused ? 'hidden' : ''}`}>
         {VIEWS.map((v) => {
           const Icon = v.icon
           const active = view === v.key
@@ -699,7 +753,7 @@ function App() {
               onClick={() => setView(v.key)}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 min-w-[52px] text-[12px] ${active ? 'text-accent' : 'text-muted'}`}
             >
-              <Icon size={20} strokeWidth={1.75} />
+              <Icon size={20} strokeWidth={1.75} fill={active ? 'currentColor' : 'none'} />
               {v.label}
             </button>
           )

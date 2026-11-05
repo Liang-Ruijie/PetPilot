@@ -26,7 +26,7 @@
   --radius-control: 12px;
   --radius-composer: 26px;
 
-  --shadow-composer: 0 4px 20px rgba(24, 32, 48, 0.06);
+  --shadow-composer: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 html,
