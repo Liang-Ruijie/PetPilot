@@ -615,11 +615,11 @@ function App() {
               <ChevronDown size={18} />
             </button>
           )}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-transparent to-canvas" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-transparent to-[#F8F8F8]" />
       </div>
 
       {view === 'chat' && (
-        <footer className="bg-canvas pb-3 pt-1 shrink-0">
+        <footer className="bg-[#F8F8F8] pb-3 pt-1 shrink-0">
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
@@ -774,7 +774,7 @@ function App() {
         </div>
       )}
 
-      <nav className={`bg-canvas pb-2 pt-2 shrink-0 flex justify-around ${inputFocused ? 'hidden' : ''}`}>
+      <nav className={`bg-[#F8F8F8] pb-2 pt-2 shrink-0 flex justify-around ${inputFocused ? 'hidden' : ''}`}>
         {VIEWS.map((v) => {
           const Icon = v.icon
           const active = view === v.key
