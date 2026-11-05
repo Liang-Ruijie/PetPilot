@@ -364,8 +364,8 @@ function App() {
     if (!el) return
     el.style.height = 'auto'
     const h = el.scrollHeight
-    el.style.height = Math.min(h, 136) + 'px'
-    setNeedsExpand(h > 138)
+    el.style.height = Math.min(h, 152) + 'px'
+    setNeedsExpand(h > 154)
   }, [text, expanded, fullExpand, view])
 
   // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
@@ -646,7 +646,7 @@ function App() {
               <div className="relative">
                 <textarea
                   ref={taRef}
-                  className={`w-full bg-transparent px-1 py-2 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
+                  className={`w-full bg-transparent px-1 py-4 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
                   rows={1}
                   placeholder="说说今天的变化…"
                   value={text}
