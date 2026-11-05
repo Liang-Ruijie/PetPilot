@@ -606,22 +606,20 @@ function App() {
           </div>
         )}
       </main>
+          {!atBottom && view === 'chat' && !inputFocused && (
+            <button
+              onClick={() => scrollToBottom(true)}
+              aria-label="回到底部"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-surface shadow-composer flex items-center justify-center text-ink"
+            >
+              <ChevronDown size={18} />
+            </button>
+          )}
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-transparent to-canvas" />
       </div>
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
-          {!atBottom && !inputFocused && (
-            <div className="flex justify-center mb-3">
-              <button
-                onClick={() => scrollToBottom(true)}
-                aria-label="回到底部"
-                className="w-9 h-9 rounded-full bg-surface shadow-composer flex items-center justify-center text-ink"
-              >
-                <ChevronDown size={18} />
-              </button>
-            </div>
-          )}
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
