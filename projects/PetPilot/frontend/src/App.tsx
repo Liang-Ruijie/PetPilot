@@ -606,13 +606,13 @@ function App() {
           </div>
         )}
       </main>
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-canvas" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-transparent to-canvas" />
       </div>
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
           {!atBottom && !inputFocused && (
-            <div className="flex justify-center mb-2">
+            <div className="flex justify-center mb-3">
               <button
                 onClick={() => scrollToBottom(true)}
                 aria-label="回到底部"
