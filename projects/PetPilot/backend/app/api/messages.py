@@ -25,6 +25,11 @@ from app.services.summary import generate_care_summary
 
 router = APIRouter()
 
+_SIMULATED_REPLY = (
+    "【模拟医院回复】感谢您整理的资料，我们已收到，会尽快安排查看。"
+    "（本回复为演示用模拟，非真实医院发送，不代表真实接诊或预约。）"
+)
+
 _UPLOADS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data",
@@ -425,6 +430,8 @@ async def send_message(
                 f"「{pet_names.get(r.pet_id, '')}」{r.quote}" for r in linked[:3]
             )
             answer = f"好的，已关联提醒：{items}。"
+    elif "发送" in text or "发给" in text:
+        answer = _SIMULATED_REPLY
     else:
         followups = []
         if any(rm.get("pet_name") is None for rm in reminder_results):
@@ -438,6 +445,11 @@ async def send_message(
             answer = ""
         if followups:
             answer = (answer + "\n" if answer else "") + "另外，" + "；".join(followups) + "（若暂时不确定，可稍后到相应页面处理。）"
+
+    # 就医摘要文字直接进聊天（不再有独立摘要页）
+    if care_results:
+        summaries = "\n\n".join(f"【{c['title']}】\n{c['summary']}" for c in care_results)
+        answer = (answer + "\n\n" if answer else "") + summaries
 
     photo_results = [
         {"id": ph.id, "pet_id": ph.pet_id, "pet_name": pet_names.get(ph.pet_id, "") if ph.pet_id else None, "filename": ph.filename}

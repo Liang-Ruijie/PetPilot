@@ -2,24 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
   Bell,
-  CalendarDays,
   Camera,
   ChevronDown,
-  FileText,
+  Copy,
   Image,
-  Inbox,
   ListChecks,
   Maximize2,
   MessageCircle,
   Minimize2,
   PawPrint,
   Plus,
+  User,
   X,
 } from 'lucide-react'
 import {
   api,
   apiMessageForm,
-  type CareSummary,
   type Fact,
   type Held,
   type Msg,
@@ -28,15 +26,13 @@ import {
   type WeeklyReview,
 } from './api'
 
-type View = 'chat' | 'records' | 'held' | 'reminders' | 'care' | 'weekly'
+type View = 'chat' | 'records' | 'reminders' | 'mine'
 
 const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
   { key: 'chat', label: '对话', icon: MessageCircle },
   { key: 'records', label: '记录', icon: ListChecks },
-  { key: 'held', label: '挂起', icon: Inbox },
   { key: 'reminders', label: '提醒', icon: Bell },
-  { key: 'care', label: '摘要', icon: FileText },
-  { key: 'weekly', label: '周回顾', icon: CalendarDays },
+  { key: 'mine', label: '我的', icon: User },
 ]
 
 type DraftPhoto = { id: string; file: File; url: string }
@@ -133,8 +129,9 @@ function App() {
   const [facts, setFacts] = useState<Fact[]>([])
   const [held, setHeld] = useState<Held[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
-  const [cares, setCares] = useState<CareSummary[]>([])
   const [weeklies, setWeeklies] = useState<WeeklyReview[]>([])
+  const [recordsTab, setRecordsTab] = useState<'confirmed' | 'unconfirmed'>('confirmed')
+  const [copiedId, setCopiedId] = useState<number | null>(null)
   const [text, setText] = useState('')
   const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([])
   const [expanded, setExpanded] = useState(false)
@@ -219,11 +216,11 @@ function App() {
 
   async function refresh(v: View) {
     try {
-      if (v === 'records') setFacts((await api('/facts')).facts)
-      else if (v === 'held') setHeld((await api('/held')).held_segments)
-      else if (v === 'reminders') setReminders((await api('/reminders')).reminders)
-      else if (v === 'care') setCares((await api('/care-summaries')).care_summaries)
-      else if (v === 'weekly') setWeeklies((await api('/weekly-reviews')).weekly_reviews)
+      if (v === 'records') {
+        setFacts((await api('/facts')).facts)
+        setHeld((await api('/held')).held_segments)
+      } else if (v === 'reminders') setReminders((await api('/reminders')).reminders)
+      else if (v === 'mine') setWeeklies((await api('/weekly-reviews')).weekly_reviews)
     } catch (e: unknown) {
       setErr((e as { message?: string }).message || '加载失败')
     }
@@ -326,20 +323,26 @@ function App() {
     }
   }
 
-  async function simulateReply(id: number) {
+  async function copyText(id: number, t: string) {
     try {
-      const data = await api(`/care-summaries/${id}/simulate-reply`, { method: 'POST' })
-      setErr(data.reply)
-    } catch (e: unknown) {
-      setErr((e as { message?: string }).message || '失败')
+      await navigator.clipboard.writeText(t)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = t
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
     }
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 1500)
   }
 
   async function genWeekly() {
     setErr('')
     try {
       await api('/weekly-review', { method: 'POST', body: JSON.stringify({}) })
-      refresh('weekly')
+      refresh('mine')
     } catch (e: unknown) {
       setErr((e as { message?: string }).message || '生成失败')
     }
@@ -427,10 +430,7 @@ function App() {
   return (
     <div className="h-dvh flex flex-col overflow-hidden max-w-[760px] mx-auto px-4 sm:px-6 relative">
       <header className="flex items-center justify-between h-[56px] shrink-0">
-        <div className="flex items-center gap-2.5">
-          <PawPrint size={26} className="text-accent" />
-          <span className="text-[20px] font-semibold text-ink">PetPilot</span>
-        </div>
+        <span className="text-[20px] font-semibold text-ink">PetPilot</span>
         <button onClick={addPet} className="flex items-center gap-1 text-[14px] text-accent font-medium min-h-[44px] px-2">
           <Plus size={16} /> 建猫
         </button>
@@ -488,6 +488,9 @@ function App() {
                       <span className="text-[12px] text-muted">PetPilot</span>
                     </div>
                     {m.content}
+                    <button onClick={() => copyText(m.id, m.content)} className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
+                      <Copy size={13} /> {copiedId === m.id ? '已复制' : '复制'}
+                    </button>
                   </div>
                 </div>
               ),
@@ -499,41 +502,42 @@ function App() {
         {view === 'records' && (
           <div>
             <SectionTitle title="记录" onClose={() => setView('chat')} />
-            {facts.length === 0 ? (
-              <p className="text-[15px] text-secondary">暂无记录。</p>
-            ) : (
-              <div className="space-y-2">
-                {facts.map((f) => (
-                  <div key={f.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] text-ink">
-                      <span className="text-secondary">「{f.pet_name}」</span>
-                      {f.topic || '记录'}
-                      {f.value != null ? ` ${f.value}${f.unit || ''}` : ''}
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setRecordsTab('confirmed')} className={`flex-1 py-2 rounded-control text-[14px] ${recordsTab === 'confirmed' ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}>已确认</button>
+              <button onClick={() => setRecordsTab('unconfirmed')} className={`flex-1 py-2 rounded-control text-[14px] ${recordsTab === 'unconfirmed' ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}>未确认</button>
+            </div>
+            {recordsTab === 'confirmed' ? (
+              facts.length === 0 ? (
+                <p className="text-[15px] text-secondary">暂无记录。</p>
+              ) : (
+                <div className="space-y-2">
+                  {facts.map((f) => (
+                    <div key={f.id} className="bg-surface border border-line rounded-card p-4">
+                      <div className="text-[15px] text-ink">
+                        <span className="text-secondary">「{f.pet_name}」</span>
+                        {f.topic || '记录'}
+                        {f.value != null ? ` ${f.value}${f.unit || ''}` : ''}
+                      </div>
+                      <div className="mt-1 text-[12px] text-muted">版本 v{f.version} · 出处：{f.quote}</div>
                     </div>
-                    <div className="mt-1 text-[12px] text-muted">版本 v{f.version} · 出处：{f.quote}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {view === 'held' && (
-          <div>
-            <SectionTitle title="挂起" onClose={() => setView('chat')} />
-            {held.length === 0 ? (
-              <p className="text-[15px] text-secondary">暂无待归属的片段。建猫后，提到那只猫的片段会自动归过去。</p>
+                  ))}
+                </div>
+              )
             ) : (
-              <div className="space-y-2">
-                {held.map((h) => (
-                  <div key={h.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] text-ink">{h.quote}</div>
-                    <div className="mt-1 text-[12px] text-muted">
-                      {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知（建猫后自动补归属）
+              held.length === 0 ? (
+                <p className="text-[15px] text-secondary">暂无待归属的片段。建猫后，提到那只猫的片段会自动归过去。</p>
+              ) : (
+                <div className="space-y-2">
+                  {held.map((h) => (
+                    <div key={h.id} className="bg-surface border border-line rounded-card p-4">
+                      <div className="text-[15px] text-ink">{h.quote}</div>
+                      <div className="mt-1 text-[12px] text-muted">
+                        {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知（建猫后自动补归属）
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         )}
@@ -568,28 +572,8 @@ function App() {
           </div>
         )}
 
-        {view === 'care' && (
+        {view === 'mine' && (
           <div>
-            <SectionTitle title="就医摘要" onClose={() => setView('chat')} />
-            {cares.length === 0 ? (
-              <p className="text-[15px] text-secondary">暂无摘要。发一句"帮我整理就医摘要，先不要发"试试。</p>
-            ) : (
-              <div className="space-y-3">
-                {cares.map((c) => (
-                  <div key={c.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] font-medium text-ink">「{c.pet_name}」{c.title}{c.stale && <span className="ml-2 text-[12px] text-warning">（已过期，事实有更新）</span>}</div>
-                    <p className="mt-2 text-[15px] leading-[1.65] text-ink whitespace-pre-wrap">{c.summary}</p>
-                    <button onClick={() => simulateReply(c.id)} className="mt-3 px-3 py-1.5 rounded-control bg-subtle text-ink text-[13px]">模拟医院回复</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {view === 'weekly' && (
-          <div>
-            <SectionTitle title="周回顾" onClose={() => setView('chat')} />
             <button onClick={genWeekly} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">生成周回顾</button>
             <div className="mt-4 space-y-3">
               {weeklies.length === 0 ? (
