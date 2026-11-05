@@ -1,5 +1,5 @@
 export type Pet = { id: number; name: string }
-export type Msg = { id: number; role: 'user' | 'assistant'; content: string }
+export type Msg = { id: number; role: 'user' | 'assistant'; content: string; photos?: { id: number; filename: string; pet_id: number | null; url?: string }[] }
 export type Fact = { id: number; pet_name: string; topic: string | null; value: number | null; unit: string | null; quote: string; version: number }
 export type Held = { id: number; quote: string; reason: string; topic: string | null; value: number | null; unit: string | null }
 export type Reminder = { id: number; pet_name: string | null; quote: string; due_at: string | null; status: string; is_due: boolean }
@@ -49,4 +49,11 @@ export async function apiForm(path: string, form: FormData) {
     throw err
   }
   return data
+}
+
+export async function apiMessageForm(text: string, files: File[]) {
+  const fd = new FormData()
+  fd.append('text', text)
+  files.forEach((f) => fd.append('files', f))
+  return apiForm('/messages', fd)
 }

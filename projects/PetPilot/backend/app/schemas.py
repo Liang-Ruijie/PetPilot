@@ -49,6 +49,7 @@ class MessageResult(BaseModel):
     corrections: list[dict] = []
     reminders: list[dict] = []
     care_requests: list[dict] = []
+    photos: list[dict] = []
     answer: str = ""
     explanation: str = ""
     receipt: str = ""

@@ -3,7 +3,7 @@ import {
   ArrowUp,
   Bell,
   CalendarDays,
-  ChevronDown,
+  Camera,
   FileText,
   Image,
   Inbox,
@@ -16,28 +16,28 @@ import {
 } from 'lucide-react'
 import {
   api,
-  apiForm,
+  apiMessageForm,
   type CareSummary,
   type Fact,
   type Held,
   type Msg,
   type Pet,
-  type Photo,
   type Reminder,
   type WeeklyReview,
 } from './api'
 
-type View = 'chat' | 'records' | 'held' | 'reminders' | 'photos' | 'care' | 'weekly'
+type View = 'chat' | 'records' | 'held' | 'reminders' | 'care' | 'weekly'
 
 const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
   { key: 'chat', label: '对话', icon: MessageCircle },
   { key: 'records', label: '记录', icon: ListChecks },
   { key: 'held', label: '挂起', icon: Inbox },
   { key: 'reminders', label: '提醒', icon: Bell },
-  { key: 'photos', label: '照片', icon: Image },
   { key: 'care', label: '摘要', icon: FileText },
   { key: 'weekly', label: '周回顾', icon: CalendarDays },
 ]
+
+type DraftPhoto = { id: string; file: File; url: string }
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [code, setCode] = useState('123456')
@@ -104,16 +104,21 @@ function App() {
   const [facts, setFacts] = useState<Fact[]>([])
   const [held, setHeld] = useState<Held[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
-  const [photos, setPhotos] = useState<Photo[]>([])
   const [cares, setCares] = useState<CareSummary[]>([])
   const [weeklies, setWeeklies] = useState<WeeklyReview[]>([])
   const [text, setText] = useState('')
-  const [photoPetId, setPhotoPetId] = useState<number | ''>('')
+  const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([])
+  const [expanded, setExpanded] = useState(false)
+  const [showPlus, setShowPlus] = useState(false)
   const [sending, setSending] = useState(false)
+  const [listening, setListening] = useState(false)
   const [err, setErr] = useState('')
+  const [atBottom, setAtBottom] = useState(true)
+
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [listening, setListening] = useState(false)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const mainRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
 
   const load = useCallback(async () => {
@@ -136,16 +141,16 @@ function App() {
     return () => window.removeEventListener('petpilot-auth-expired', onExpired)
   }, [])
 
-  // 语音输入（浏览器 Web Speech API；不支持/失败回退文字）
+  // 语音（按住说话）
   useEffect(() => {
     const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
     if (!SR) return
     const rec = new SR()
     rec.lang = 'zh-CN'
-    rec.continuous = false
+    rec.continuous = true
     rec.interimResults = false
     rec.onresult = (e: any) => {
-      const t = e.results[0][0]?.transcript || ''
+      const t = Array.from(e.results).map((r: any) => r[0]?.transcript || '').join('')
       if (t) setText((prev) => (prev ? prev + t : t))
     }
     rec.onend = () => setListening(false)
@@ -158,7 +163,6 @@ function App() {
 
   function startListening() {
     const rec = recognitionRef.current
-    if (listening) return
     if (!rec) {
       alert('语音识别在当前环境不可用（需 HTTPS 或支持的浏览器），请用文字输入')
       return
@@ -168,18 +172,25 @@ function App() {
       rec.start()
     } catch {
       setListening(false)
-      alert('语音识别不可用，请用文字输入')
+    }
+  }
+  function stopListening() {
+    const rec = recognitionRef.current
+    if (!rec || !listening) return
+    try {
+      rec.stop()
+    } catch {
+      /* ignore */
     }
   }
 
-  async function refresh(view: View) {
+  async function refresh(v: View) {
     try {
-      if (view === 'records') setFacts((await api('/facts')).facts)
-      else if (view === 'held') setHeld((await api('/held')).held_segments)
-      else if (view === 'reminders') setReminders((await api('/reminders')).reminders)
-      else if (view === 'photos') setPhotos((await api('/photos')).photos)
-      else if (view === 'care') setCares((await api('/care-summaries')).care_summaries)
-      else if (view === 'weekly') setWeeklies((await api('/weekly-reviews')).weekly_reviews)
+      if (v === 'records') setFacts((await api('/facts')).facts)
+      else if (v === 'held') setHeld((await api('/held')).held_segments)
+      else if (v === 'reminders') setReminders((await api('/reminders')).reminders)
+      else if (v === 'care') setCares((await api('/care-summaries')).care_summaries)
+      else if (v === 'weekly') setWeeklies((await api('/weekly-reviews')).weekly_reviews)
     } catch (e: unknown) {
       setErr((e as { message?: string }).message || '加载失败')
     }
@@ -200,20 +211,52 @@ function App() {
     }
   }
 
+  function addFiles(list: FileList | null) {
+    if (!list || list.length === 0) return
+    const files = Array.from(list)
+    const remain = 5 - draftPhotos.length
+    if (remain <= 0) {
+      alert('每条消息最多 5 张')
+      return
+    }
+    if (files.length > remain) {
+      alert(`这条消息还能加 ${remain} 张`)
+    }
+    const add = files.slice(0, remain)
+    setDraftPhotos((prev) => [
+      ...prev,
+      ...add.map((f) => ({ id: `${Date.now()}-${Math.random()}`, file: f, url: URL.createObjectURL(f) })),
+    ])
+    setExpanded(true)
+  }
+
+  function removeDraftPhoto(id: string) {
+    setDraftPhotos((prev) => prev.filter((p) => p.id !== id))
+  }
+
   async function send() {
     const t = text.trim()
-    if (!t || sending) return
+    if ((!t && draftPhotos.length === 0) || sending) return
     setSending(true)
     setErr('')
+    const files = draftPhotos.map((p) => p.file)
+    const tmpPhotos = draftPhotos.map((p) => ({ id: 0, filename: p.file.name, pet_id: null, url: p.url }))
+    setMessages((prev) => [
+      ...prev,
+      { id: -Date.now(), role: 'user', content: t || '[图片]', photos: tmpPhotos },
+      { id: -Date.now() - 1, role: 'assistant', content: '正在思考…', photos: [] },
+    ])
     setText('')
+    setDraftPhotos([])
+    setExpanded(false)
+    setShowPlus(false)
     try {
-      await api('/messages', { method: 'POST', body: JSON.stringify({ text: t }) })
-      await load()
+      await apiMessageForm(t, files)
     } catch (e: unknown) {
       setErr((e as { message?: string }).message || '发送失败')
     } finally {
       setSending(false)
-      taRef.current?.focus()
+      await load()
     }
   }
 
@@ -249,25 +292,6 @@ function App() {
     }
   }
 
-  async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setErr('')
-    try {
-      const desc = prompt('照片描述（可选）') || ''
-      const fd = new FormData()
-      fd.append('file', f)
-      fd.append('description', desc)
-      if (photoPetId !== '') fd.append('pet_id', String(photoPetId))
-      await apiForm('/photos', fd)
-      refresh('photos')
-    } catch (err2: unknown) {
-      setErr((err2 as { message?: string }).message || '上传失败')
-    } finally {
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
   async function simulateReply(id: number) {
     try {
       const data = await api(`/care-summaries/${id}/simulate-reply`, { method: 'POST' })
@@ -286,6 +310,21 @@ function App() {
       setErr((e as { message?: string }).message || '生成失败')
     }
   }
+
+  function onMainScroll() {
+    const el = mainRef.current
+    if (!el) return
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
+  }
+
+  function scrollToBottom() {
+    const el = mainRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }
+
+  useEffect(() => {
+    if (atBottom) scrollToBottom()
+  }, [messages, atBottom])
 
   if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
 
@@ -311,7 +350,7 @@ function App() {
         </div>
       )}
 
-      <main className="flex-1 py-4 overflow-y-auto">
+      <main ref={mainRef} onScroll={onMainScroll} className="flex-1 py-4 overflow-y-auto">
         {view === 'chat' && (
           <div className="space-y-6">
             {messages.length === 0 && (
@@ -326,7 +365,19 @@ function App() {
               m.role === 'user' ? (
                 <div key={m.id} className="flex justify-end">
                   <div className="max-w-[85%] bg-user-bg text-user-text rounded-bubble rounded-br-md px-4 py-3 text-[16px] leading-[1.65]">
-                    {m.content}
+                    {(m.photos && m.photos.length > 0) && (
+                      <div className="flex gap-2 overflow-x-auto mb-2">
+                        {m.photos.map((ph, i) => (
+                          <img
+                            key={i}
+                            src={ph.url || `/api/photos/${ph.id}/file`}
+                            alt=""
+                            className="w-20 h-20 object-cover rounded-control shrink-0"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {m.content !== '[图片]' && m.content}
                   </div>
                 </div>
               ) : (
@@ -341,6 +392,7 @@ function App() {
                 </div>
               ),
             )}
+            {err && <p className="text-[13px] text-red-500">{err}</p>}
           </div>
         )}
 
@@ -416,41 +468,6 @@ function App() {
           </div>
         )}
 
-        {view === 'photos' && (
-          <div>
-            <SectionTitle title="照片" onClose={() => setView('chat')} />
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative">
-                <select
-                  value={photoPetId}
-                  onChange={(e) => setPhotoPetId(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="h-[40px] pl-3 pr-8 rounded-control border border-line bg-surface text-[14px] text-ink appearance-none"
-                >
-                  <option value="">不指定猫</option>
-                  {pets.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted" />
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
-              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">上传照片</button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {photos.length === 0 ? (
-                <p className="text-[15px] text-secondary">暂无照片。</p>
-              ) : (
-                photos.map((p) => (
-                  <div key={p.id} className="bg-surface border border-line rounded-card p-4">
-                    <div className="text-[15px] text-ink">{p.pet_name ? `「${p.pet_name}」` : ''} {p.filename}</div>
-                    {p.description && <div className="mt-1 text-[13px] text-secondary">{p.description}</div>}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
         {view === 'care' && (
           <div>
             <SectionTitle title="就医摘要" onClose={() => setView('chat')} />
@@ -488,45 +505,113 @@ function App() {
             </div>
           </div>
         )}
-
-        {err && view !== 'chat' && (
-          <div className="mt-3 bg-danger-bg text-danger text-[13px] rounded-card px-4 py-2.5 whitespace-pre-wrap">{err}</div>
-        )}
       </main>
+
+      {!atBottom && view === 'chat' && (
+        <button
+          onClick={scrollToBottom}
+          aria-label="回到底部"
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
+        >
+          <ArrowUp size={18} className="rotate-180" />
+        </button>
+      )}
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
-          <div className="flex items-end gap-2 bg-surface border border-line rounded-composer shadow-composer p-1.5">
-            <button
-              onClick={startListening}
-              aria-label="语音输入"
-              className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
+          {expanded && draftPhotos.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto mb-2 px-1">
+              {draftPhotos.map((p) => (
+                <div key={p.id} className="relative shrink-0">
+                  <img src={p.url} alt="" className="w-16 h-16 object-cover rounded-control" />
+                  <button
+                    onClick={() => removeDraftPhoto(p.id)}
+                    aria-label="移除照片"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-ink text-white flex items-center justify-center"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {showPlus && (
+            <div className="flex gap-3 mb-2 px-1">
+              <button onClick={() => cameraRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-control bg-surface border border-line text-[14px] text-ink">
+                <Camera size={18} /> 拍照
+              </button>
+              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-control bg-surface border border-line text-[14px] text-ink">
+                <Image size={18} /> 照片
+              </button>
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
+
+          {!expanded ? (
+            <div
+              onClick={() => { setExpanded(true); setTimeout(() => taRef.current?.focus(), 0) }}
+              className="flex items-center gap-2 bg-surface border border-line rounded-composer shadow-composer p-1.5 cursor-text"
             >
-              <Mic size={20} />
-            </button>
-            <textarea
-              ref={taRef}
-              className="flex-1 bg-transparent px-3 py-2.5 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
-              rows={1}
-              placeholder="说说今天的变化…"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  send()
-                }
-              }}
-            />
-            <button
-              onClick={send}
-              disabled={sending || !text.trim()}
-              aria-label="发送"
-              className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-accent text-white hover:bg-accent-hover disabled:bg-subtle disabled:text-muted"
-            >
-              <ArrowUp size={20} />
-            </button>
-          </div>
+              <button
+                onPointerDown={(e) => { e.preventDefault(); startListening() }}
+                onPointerUp={stopListening}
+                onPointerLeave={stopListening}
+                aria-label="按住说话"
+                className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
+              >
+                <Mic size={20} />
+              </button>
+              <span className="flex-1 px-2 text-[16px] text-muted">发消息或按住说话…</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPlus((v) => !v) }}
+                aria-label="添加"
+                className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-subtle text-ink"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          ) : (
+            <div className="bg-surface border border-line rounded-composer shadow-composer p-1.5">
+              <textarea
+                ref={taRef}
+                className="w-full bg-transparent px-3 py-2.5 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
+                rows={1}
+                placeholder="说说今天的变化…"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    send()
+                  }
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onPointerDown={(e) => { e.preventDefault(); startListening() }}
+                  onPointerUp={stopListening}
+                  onPointerLeave={stopListening}
+                  aria-label="按住说话"
+                  className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
+                >
+                  <Mic size={20} />
+                </button>
+                <button onClick={() => setShowPlus((v) => !v)} aria-label="添加" className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-subtle text-ink">
+                  <Plus size={20} />
+                </button>
+                <div className="flex-1" />
+                <button
+                  onClick={send}
+                  disabled={sending || (!text.trim() && draftPhotos.length === 0)}
+                  aria-label="发送"
+                  className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-accent text-white hover:bg-accent-hover disabled:bg-subtle disabled:text-muted"
+                >
+                  <ArrowUp size={20} />
+                </button>
+              </div>
+            </div>
+          )}
         </footer>
       )}
 

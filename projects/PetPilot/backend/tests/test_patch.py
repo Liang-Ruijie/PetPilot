@@ -5,12 +5,12 @@ def test_reattribute_after_pet_created(client, auth, monkeypatch):
     # 未建猫时发“明月今天吃了26克” → 挂起
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [{"kind": "add_observation", "quote": "明月今天吃了26克", "pet_id": 1, "topic": "进食", "value": 26, "unit": "克"}],
             "dialogue": {},
         },
     )
-    r = client.post("/api/messages", json={"text": "明月今天吃了26克"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "明月今天吃了26克"}, headers=auth)
     assert len(r.json()["held_segments"]) == 1
 
     # 建猫“明月” → 自动补归属
@@ -44,12 +44,12 @@ def test_reminder_fill_time(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天提醒我给明月称重"}]},
         },
     )
-    r = client.post("/api/messages", json={"text": "明天提醒我给明月称重"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "明天提醒我给明月称重"}, headers=auth)
     rid = r.json()["reminders"][0]["id"]
     assert r.json()["reminders"][0]["due_at"] is None  # 无具体时间 → 待补
 
@@ -63,12 +63,12 @@ def test_reminder_without_cat_not_attributed(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天提醒称重"}]},
         },
     )
-    r = client.post("/api/messages", json={"text": "明天提醒称重"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "明天提醒称重"}, headers=auth)
     data = r.json()
     assert len(data["reminders"]) == 1
     assert data["reminders"][0]["pet_name"] is None  # 未指定猫，不猜
@@ -80,23 +80,23 @@ def test_resolve_held_by_clarification(client, auth, monkeypatch):
 
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [{"kind": "hold_segment", "quote": "他今天拉稀了", "topic": "状态"}],
             "dialogue": {},
         },
     )
-    r = client.post("/api/messages", json={"text": "他今天拉稀了，状态不好"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "他今天拉稀了，状态不好"}, headers=auth)
     held_id = r.json()["held_segments"][0]["id"]
 
     # 主人澄清“他指的是明月”
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [{"kind": "resolve_held", "held_id": held_id, "pet_id": 1, "quote": "他指的是明月"}],
             "dialogue": {},
         },
     )
-    r = client.post("/api/messages", json={"text": "他指的是明月"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "他指的是明月"}, headers=auth)
     data = r.json()
     assert any(f["pet_name"] == "明月" and f["topic"] == "状态" for f in data["facts"])
     assert client.get("/api/held", headers=auth).json()["held_segments"] == []
@@ -109,20 +109,20 @@ def test_clarification_assigns_pending_reminder(client, auth, monkeypatch):
     # “明天称体重” → 提醒，待补对象
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天称体重"}]},
         },
     )
-    r = client.post("/api/messages", json={"text": "明天称体重"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "明天称体重"}, headers=auth)
     assert r.json()["reminders"][0]["pet_name"] is None
 
     # 澄清“他是明月” → 待补对象的提醒归到明月
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {"operations": [], "dialogue": {}},
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
     )
-    client.post("/api/messages", json={"text": "他是明月"}, headers=auth)
+    client.post("/api/messages", data={"text": "他是明月"}, headers=auth)
     reminders = client.get("/api/reminders", headers=auth).json()["reminders"]
     assert reminders[0]["pet_name"] == "明月"
 
@@ -131,19 +131,58 @@ def test_care_intent_fallback_generates_summary(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
             "operations": [{"kind": "add_observation", "quote": "今天他有点软便", "pet_id": 1, "topic": "状态"}],
             "dialogue": {},
         },
     )
-    client.post("/api/messages", json={"text": "今天他有点软便"}, headers=auth)
+    client.post("/api/messages", data={"text": "今天他有点软便"}, headers=auth)
 
     # 主人说“整理吧”，但模型不输出 care_request → 确定性兜底生成
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None: {"operations": [], "dialogue": {}},
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
     )
-    r = client.post("/api/messages", json={"text": "可以，你帮我整理吧"}, headers=auth)
+    r = client.post("/api/messages", data={"text": "可以，你帮我整理吧"}, headers=auth)
     data = r.json()
     assert len(data["care_requests"]) == 1
     assert data["care_requests"][0]["pet_name"] == "明月"
+
+
+def test_photo_in_message_attribution(client, auth, monkeypatch):
+    client.post("/api/pets", json={"name": "明月"}, headers=auth)
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+            "operations": [{"kind": "add_observation", "quote": "明月拉稀了", "pet_id": 1, "topic": "状态"}],
+            "dialogue": {},
+        },
+    )
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    r = client.post(
+        "/api/messages",
+        data={"text": "明月拉稀了"},
+        files=[("files", ("a.png", png, "image/png"))],
+        headers=auth,
+    )
+    data = r.json()
+    assert len(data["photos"]) == 1
+    assert data["photos"][0]["pet_name"] == "明月"  # 文字提到明月 → 照片归明月
+
+
+def test_photo_in_message_unattributed(client, auth, monkeypatch):
+    client.post("/api/pets", json={"name": "明月"}, headers=auth)
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
+    )
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    r = client.post(
+        "/api/messages",
+        data={"text": "小猫拉稀了"},
+        files=[("files", ("a.png", png, "image/png"))],
+        headers=auth,
+    )
+    data = r.json()
+    assert data["photos"][0]["pet_name"] is None  # 未指定猫 → 照片挂起

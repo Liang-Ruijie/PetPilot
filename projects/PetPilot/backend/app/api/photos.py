@@ -1,6 +1,7 @@
 import os
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
@@ -64,6 +65,16 @@ async def upload_photo(
         "filename": photo.filename,
         "description": photo.description,
     }
+
+
+@router.get("/photos/{photo_id}/file")
+def get_photo_file(photo_id: int, db: Session = Depends(get_db), sess=Depends(get_current_session)):
+    photo = db.query(Photo).filter(Photo.id == photo_id).first()
+    if not photo:
+        raise HTTPException(
+            404, detail={"error": {"code": "PHOTO_NOT_FOUND", "message": "照片不存在"}}
+        )
+    return FileResponse(photo.stored_path)
 
 
 @router.get("/photos")

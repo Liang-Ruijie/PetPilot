@@ -52,7 +52,8 @@ dialogue 对象（可选字段）：
 13. 追问和风险提醒只针对原文已提到的事实，绝对不要引入原文没提到的词汇、症状、疾病或概念（如化妆品、妊娠、肥胖等任何无关内容）；只围绕原文说。
 14. 观察到健康问题（如拉稀）时，给出简短建议，并可提示「需要的话可以让我整理就医摘要」，但不要主动承诺联系医院。
 15. 建猫档案请引导主人使用界面的「建猫」按钮，你无法通过对话创建猫档案；如果主人要求建猫，回复「请点右上角『建猫』按钮添加」。
-16. 就医摘要只生成、不真实外发；主人说「发送/发给医院」时，回复「摘要只生成、不外发；如需演示流程，可到摘要页点「模拟医院回复」按钮」，不要声称已发送。"""
+16. 就医摘要只生成、不真实外发；主人说「发送/发给医院」时，回复「摘要只生成、不外发；如需演示流程，可到摘要页点「模拟医院回复」按钮」，不要声称已发送。
+17. 当消息带照片时，如果照片归属某只猫，在 dialogue 里输出 photo_attributions 数组：每项 {"start": 1, "end": N, "pet_id": 猫ID}，表示第 start 到第 end 张照片（含端点）归到该猫；无法确定的照片不要写进区间。"""
 
 
 class ModelClient:
@@ -69,8 +70,10 @@ class ModelClient:
             )
 
     @staticmethod
-    def _build_user(text: str, pets, facts=None, held=None) -> str:
+    def _build_user(text: str, pets, facts=None, held=None, photo_count=0) -> str:
         lines = []
+        if photo_count:
+            lines.append(f"这条消息带 {photo_count} 张照片（编号 1..{photo_count}）。")
         if pets:
             lines.append("允许的宠物身份：")
             for p in pets:
@@ -97,11 +100,11 @@ class ModelClient:
         lines.append(f"主人消息：{text}")
         return "\n".join(lines)
 
-    def extract(self, text: str, pets, facts=None, held=None) -> dict:
+    def extract(self, text: str, pets, facts=None, held=None, photo_count=0) -> dict:
         if self.client is None:
             return self._mock(text)
 
-        user_msg = self._build_user(text, pets, facts, held)
+        user_msg = self._build_user(text, pets, facts, held, photo_count)
         last_err: Exception | None = None
         for attempt in range(2):
             try:

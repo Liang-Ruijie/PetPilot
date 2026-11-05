@@ -1,17 +1,35 @@
+import os
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import CareSummary, Correction, Fact, HeldSegment, Message, Pet, Reminder, WeeklyReview
-from app.schemas import MessageIn, MessageResult
+from app.models import (
+    CareSummary,
+    Correction,
+    Fact,
+    HeldSegment,
+    Message,
+    Pet,
+    Photo,
+    Reminder,
+    WeeklyReview,
+)
+from app.schemas import MessageResult
 from app.services.attribution import mention_count, resolve_operations
 from app.services.model_client import ModelClient, ModelError, SchemaError
 from app.services.reminder_intent import is_authorized_reminder, parse_due_time
+from app.services.storage import save_image, validate_image
 from app.services.summary import generate_care_summary
 
 router = APIRouter()
+
+_UPLOADS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data",
+    "uploads",
+)
 
 
 def _extract_text(val):
@@ -22,10 +40,12 @@ def _extract_text(val):
     return ""
 
 
-def _receipt(facts, held, corrections, reminders, cares, resolved=0) -> str:
+def _receipt(facts, held, corrections, reminders, cares, photos=0, resolved=0) -> str:
     parts = []
     if facts:
         parts.append(f"已保存 {len(facts)} 条记录")
+    if photos:
+        parts.append(f"已保存 {photos} 张照片")
     if resolved:
         parts.append(f"已把 {resolved} 条挂起记录归到对应猫")
     if corrections:
@@ -40,13 +60,14 @@ def _receipt(facts, held, corrections, reminders, cares, resolved=0) -> str:
 
 
 @router.post("/messages", response_model=MessageResult)
-def send_message(
-    body: MessageIn,
+async def send_message(
+    text: str = Form(default=""),
+    files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
     sess=Depends(get_current_session),
 ):
-    text = body.text.strip()
-    if not text:
+    text = text.strip()
+    if not text and not files:
         raise HTTPException(
             422, detail={"error": {"code": "VALIDATION_ERROR", "message": "消息不能为空"}}
         )
@@ -68,27 +89,45 @@ def send_message(
         }
         for f in recent_facts
     ]
-
     held_context = [
         {"id": h.id, "quote": h.quote, "topic": h.topic, "value": h.value, "unit": h.unit}
         for h in db.query(HeldSegment).filter(HeldSegment.status == "pending").all()
     ]
 
-    try:
-        raw = ModelClient().extract(text, pets, facts_context, held_context)
-    except SchemaError as e:
-        raise HTTPException(
-            502, detail={"error": {"code": "SCHEMA_INVALID", "message": str(e)}}
-        )
-    except ModelError as e:
-        raise HTTPException(
-            502, detail={"error": {"code": "MODEL_FAILED", "message": str(e)}}
-        )
+    msg = Message(role="user", content=text or "[图片]")
+    db.add(msg)
+    db.flush()
+
+    # 保存照片（最多 5 张，关联到本条消息）
+    saved_photos: list[Photo] = []
+    for f in files[:5]:
+        content = await f.read()
+        if validate_image(content, f.filename or "") is not None:
+            continue
+        safe_name, path = save_image(content, f.filename or "", _UPLOADS_DIR)
+        photo = Photo(filename=safe_name, stored_path=path, description="", message_id=msg.id)
+        db.add(photo)
+        saved_photos.append(photo)
+    photo_count = len(saved_photos)
+    db.flush()
+
+    raw = {"operations": [], "dialogue": {}}
+    if text:
+        try:
+            raw = ModelClient().extract(text, pets, facts_context, held_context, photo_count)
+        except SchemaError as e:
+            raise HTTPException(
+                502, detail={"error": {"code": "SCHEMA_INVALID", "message": str(e)}}
+            )
+        except ModelError as e:
+            raise HTTPException(
+                502, detail={"error": {"code": "MODEL_FAILED", "message": str(e)}}
+            )
 
     adds, holds, corrections, resolves = resolve_operations(raw.get("operations", []), text, pets)
     dialogue = raw.get("dialogue") or {}
 
-    # 确定性补归属：主人澄清“他指的是X” / “是X的”
+    # 确定性补归属：主人澄清“他指的是X / 他是X / 是给X / 给X的 / 归到X”
     clarified_pet = None
     for pet in pets:
         if (
@@ -100,10 +139,6 @@ def send_message(
             or re.search(f"[他它她]是{pet.name}", text)
         ):
             clarified_pet = pet  # 不 break：口误更正时最后提到的猫优先
-
-    msg = Message(role="user", content=text)
-    db.add(msg)
-    db.flush()
 
     # 1) 新增观察
     facts = []
@@ -180,7 +215,6 @@ def send_message(
             fact.unit = c["unit"]
         fact.quote = c.get("quote") or fact.quote
         fact.version += 1
-        # R24：同步——引用该事实的摘要/周回顾标记为过期
         for s in db.query(CareSummary).all():
             if fact.id in (s.fact_ids or []):
                 s.stale = True
@@ -191,7 +225,7 @@ def send_message(
             {"fact_id": fact.id, "pet_id": fact.pet_id, "new_value": new_value, "version": fact.version, "status": "ok"}
         )
 
-    # 3.5) 补归属：主人澄清了之前挂起片段属于哪只猫
+    # 3.5) 补归属
     resolved_facts = []
     resolved_held_ids = set()
     for rv in resolves:
@@ -221,9 +255,9 @@ def send_message(
         h.status = "resolved"
         h.resolved_pet_id = rv["pet_id"]
         resolved_facts.append(f)
-    db.flush()  # 关键：把已解决的挂起状态刷到库，避免下面确定性规则重复归因
+    db.flush()
 
-    # 确定性补归属：澄清“他指的是X/他是X” → 把仍挂起的片段 + 待补对象的提醒归到 X
+    # 确定性补归属：把仍挂起的片段 + 待补对象提醒 + 挂起照片归到澄清的猫
     resolved_reminder_count = 0
     if clarified_pet:
         for h in db.query(HeldSegment).filter(HeldSegment.status == "pending").all():
@@ -250,6 +284,8 @@ def send_message(
         ).all():
             rem.pet_id = clarified_pet.id
             resolved_reminder_count += 1
+        for ph in db.query(Photo).filter(Photo.pet_id.is_(None)).all():
+            ph.pet_id = clarified_pet.id
 
     # 4) 提醒
     reminder_results = []
@@ -259,20 +295,19 @@ def send_message(
         if not quote or quote not in text:
             continue
         if quote in seen_reminder_quotes:
-            continue  # 去重：模型重复输出
+            continue
         seen_reminder_quotes.add(quote)
         if not is_authorized_reminder(quote):
-            continue  # 否定/假设/问句/引用不算授权
+            continue
         due = parse_due_time(quote)
         pid = r.get("pet_id")
-        # 服务端裁决：提醒对象必须整词匹配，未明确指定不猜猫（R36）
         mentioned = [p for p in pets if mention_count(p.name, quote) >= 1]
         if pid in allowed_ids and pid in {p.id for p in mentioned}:
-            pass  # 明确提到，信任
+            pass
         elif len(mentioned) == 1:
-            pid = mentioned[0].id  # 明确表达优先
+            pid = mentioned[0].id
         else:
-            pid = None  # 未指定 → 待补对象
+            pid = None
         rem = Reminder(pet_id=pid, quote=quote, due_at=due, status="pending")
         db.add(rem)
         db.flush()
@@ -291,11 +326,11 @@ def send_message(
         pid = cr.get("pet_id")
         mentioned = [p for p in pets if mention_count(p.name, text) >= 1]
         if pid in allowed_ids and pid in {p.id for p in mentioned}:
-            pass  # 明确提到，信任
+            pass
         elif len(mentioned) == 1:
-            pid = mentioned[0].id  # 明确表达优先
+            pid = mentioned[0].id
         else:
-            unattributed_care = True  # 未指定猫，不猜，稍后追问
+            unattributed_care = True
             continue
         fact_ids = cr.get("fact_ids") or []
         if fact_ids:
@@ -348,11 +383,32 @@ def send_message(
         else:
             unattributed_care = True
 
+    # 6) 照片归属
+    if saved_photos:
+        mentioned_names = [p.name for p in pets if mention_count(p.name, text) >= 1] if text else []
+        if len(mentioned_names) == 1:
+            pid = next(p.id for p in pets if p.name == mentioned_names[0])
+            for ph in saved_photos:
+                ph.pet_id = pid
+        else:
+            for pa in dialogue.get("photo_attributions", []):
+                try:
+                    start = int(pa.get("start", 1))
+                    end = int(pa.get("end", start))
+                    pid = pa.get("pet_id")
+                except (TypeError, ValueError):
+                    continue
+                if pid not in allowed_ids:
+                    continue
+                for ph in saved_photos[start - 1 : end]:
+                    if ph.pet_id is None:
+                        ph.pet_id = pid
+    db.flush()
+
     answer = _extract_text(dialogue.get("answer"))
     explanation = _extract_text(dialogue.get("explanation"))
 
     if clarified_pet and (resolved_facts or resolved_reminder_count):
-        # 澄清归属：用确定性回复替换模型的笨拙回答，不再追问“做什么”
         parts = []
         if resolved_facts:
             parts.append(f"{len(resolved_facts)} 条挂起记录")
@@ -361,20 +417,24 @@ def send_message(
         answer = f"好的，已把 {'、'.join(parts)} 归到「{clarified_pet.name}」。"
     else:
         followups = []
-        # 问题1：有未指定猫的提醒时，追问是哪只猫
         if any(rm.get("pet_name") is None for rm in reminder_results):
             followups.append("有提醒还没指定是哪只猫，请问是给谁？")
-        # 挂起片段：追问是哪只猫
         if helds:
             followups.append(f"有 {len(helds)} 条记录还不确定是哪只猫，请告诉我是哪只猫的。")
-        # 就医摘要：未指定猫，追问
+        if saved_photos and any(ph.pet_id is None for ph in saved_photos):
+            followups.append(f"有 {sum(1 for ph in saved_photos if ph.pet_id is None)} 张照片还不确定是哪只猫的，请告诉我。")
         if unattributed_care:
             followups.append("请问是整理哪只猫的就医摘要？")
-            answer = ""  # 模型猜猫的回复不可信，清空
+            answer = ""
         if followups:
             answer = (answer + "\n" if answer else "") + "另外，" + "；".join(followups) + "（若暂时不确定，可稍后到相应页面处理。）"
 
-    receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(resolved_facts))
+    photo_results = [
+        {"id": ph.id, "pet_id": ph.pet_id, "pet_name": pet_names.get(ph.pet_id, "") if ph.pet_id else None, "filename": ph.filename}
+        for ph in saved_photos
+    ]
+
+    receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(photo_results), len(resolved_facts))
     assistant_text = receipt
     if answer:
         assistant_text = f"{receipt}\n{answer}"
@@ -402,6 +462,7 @@ def send_message(
         "corrections": correction_results,
         "reminders": reminder_results,
         "care_requests": care_results,
+        "photos": photo_results,
         "answer": answer,
         "explanation": explanation,
         "receipt": receipt,
@@ -413,8 +474,15 @@ def list_messages(
     db: Session = Depends(get_db), sess=Depends(get_current_session)
 ):
     msgs = db.query(Message).order_by(Message.id.asc()).all()
+    all_photos = db.query(Photo).all()
+    photos_by_msg: dict = {}
+    for p in all_photos:
+        photos_by_msg.setdefault(p.message_id, []).append(
+            {"id": p.id, "filename": p.filename, "pet_id": p.pet_id}
+        )
     return {
         "messages": [
-            {"id": m.id, "role": m.role, "content": m.content} for m in msgs
+            {"id": m.id, "role": m.role, "content": m.content, "photos": photos_by_msg.get(m.id, [])}
+            for m in msgs
         ]
     }
