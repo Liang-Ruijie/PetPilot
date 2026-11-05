@@ -639,9 +639,9 @@ function App() {
               </button>
             </div>
           ) : (
-            <div className="relative bg-surface rounded-composer shadow-composer">
+            <div className="relative bg-surface rounded-composer shadow-composer p-2">
               {draftPhotos.length > 0 && (
-                <div className="flex gap-2 px-2 pt-2">
+                <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
                     <div key={p.id} className="relative w-[calc((100%-32px)/5)] aspect-square shrink-0">
                       <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
@@ -656,7 +656,7 @@ function App() {
                   ))}
                 </div>
               )}
-              <div className="relative px-2 py-2">
+              <div className="relative py-2">
                 <textarea
                   ref={taRef}
                   className={`w-full bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand ? 'pr-10' : ''}`}
@@ -677,12 +677,12 @@ function App() {
                   }}
                 />
                 {needsExpand && !fullExpand && (
-                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 h-6 w-6 flex items-center justify-center text-[#a3a3a3]">
-                    <Maximize2 size={16} />
+                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
+                    <Maximize2 size={18} />
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2 px-2 pb-2">
+              <div className="flex items-center gap-2">
                 <button
                   onPointerDown={(e) => { e.preventDefault(); startListening() }}
                   onPointerUp={stopListening}
