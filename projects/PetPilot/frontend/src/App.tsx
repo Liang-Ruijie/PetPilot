@@ -9,6 +9,7 @@ import {
   Image,
   Inbox,
   ListChecks,
+  Maximize2,
   MessageCircle,
   PawPrint,
   Plus,
@@ -363,9 +364,9 @@ function App() {
     if (!el) return
     el.style.height = 'auto'
     const h = el.scrollHeight
-    el.style.height = Math.min(h, 120) + 'px'
-    setNeedsExpand(h > 122)
-  }, [text, expanded, fullExpand])
+    el.style.height = Math.min(h, 128) + 'px'
+    setNeedsExpand(h > 130)
+  }, [text, expanded, fullExpand, view])
 
   // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
   useEffect(() => {
@@ -422,7 +423,7 @@ function App() {
       )}
 
       <div className="relative flex-1 min-h-0">
-        <main ref={mainRef} onScroll={onMainScroll} onClick={() => { if (expanded) { setExpanded(false); setShowPlus(false) } }} className="h-full py-4 overflow-y-auto">
+        <main ref={mainRef} onScroll={onMainScroll} onClick={() => { if (expanded && !text.trim() && draftPhotos.length === 0) { setExpanded(false); setShowPlus(false) } }} className="h-full py-4 overflow-y-auto">
         {view === 'chat' && (
           <div className="space-y-6">
             {messages.length === 0 && (
@@ -586,6 +587,17 @@ function App() {
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
+          {!atBottom && !inputFocused && (
+            <div className="flex justify-center mb-2">
+              <button
+                onClick={() => scrollToBottom(true)}
+                aria-label="回到底部"
+                className="w-9 h-9 rounded-full bg-surface shadow-composer flex items-center justify-center text-ink"
+              >
+                <ChevronDown size={18} />
+              </button>
+            </div>
+          )}
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
@@ -618,7 +630,7 @@ function App() {
               {draftPhotos.length > 0 && (
                 <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
-                    <div key={p.id} className="relative w-14 h-14 shrink-0">
+                    <div key={p.id} className="relative flex-1 aspect-square min-w-0">
                       <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
                       <button
                         onClick={() => removeDraftPhoto(p.id)}
@@ -631,28 +643,32 @@ function App() {
                   ))}
                 </div>
               )}
-              <textarea
-                ref={taRef}
-                className={`w-full bg-transparent px-1 py-1 text-[16px] text-ink resize-none focus:outline-none ${needsExpand ? 'pr-12' : ''}`}
-                rows={1}
-                placeholder="说说今天的变化…"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => {
-                  setInputFocused(false)
-                  if (!text.trim() && draftPhotos.length === 0) setExpanded(false)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    send()
-                  }
-                }}
-              />
-              {needsExpand && !fullExpand && (
-                <button onClick={() => setFullExpand(true)} className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded bg-subtle text-accent text-[12px]">展开</button>
-              )}
+              <div className="relative">
+                <textarea
+                  ref={taRef}
+                  className={`w-full bg-transparent px-1 py-1 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
+                  rows={1}
+                  placeholder="说说今天的变化…"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => {
+                    setInputFocused(false)
+                    if (!text.trim() && draftPhotos.length === 0) setExpanded(false)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      send()
+                    }
+                  }}
+                />
+                {needsExpand && !fullExpand && (
+                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center text-muted">
+                    <Maximize2 size={18} />
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onPointerDown={(e) => { e.preventDefault(); startListening() }}
@@ -697,16 +713,6 @@ function App() {
             </div>
           </div>
         </div>
-      )}
-
-      {!atBottom && view === 'chat' && !inputFocused && (
-        <button
-          onClick={() => scrollToBottom(true)}
-          aria-label="回到底部"
-          className="absolute bottom-[150px] left-1/2 -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
-        >
-          <ChevronDown size={18} />
-        </button>
       )}
 
       {preview && (
