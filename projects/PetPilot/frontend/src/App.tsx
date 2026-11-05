@@ -364,8 +364,8 @@ function App() {
     if (!el) return
     el.style.height = 'auto'
     const h = el.scrollHeight
-    el.style.height = Math.min(h, 128) + 'px'
-    setNeedsExpand(h > 130)
+    el.style.height = Math.min(h, 136) + 'px'
+    setNeedsExpand(h > 138)
   }, [text, expanded, fullExpand, view])
 
   // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
@@ -630,7 +630,7 @@ function App() {
               {draftPhotos.length > 0 && (
                 <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
-                    <div key={p.id} className="relative flex-1 aspect-square min-w-0">
+                    <div key={p.id} className="relative w-[calc((100%-32px)/5)] aspect-square shrink-0">
                       <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
                       <button
                         onClick={() => removeDraftPhoto(p.id)}
@@ -646,7 +646,7 @@ function App() {
               <div className="relative">
                 <textarea
                   ref={taRef}
-                  className={`w-full bg-transparent px-1 py-1 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
+                  className={`w-full bg-transparent px-1 py-2 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
                   rows={1}
                   placeholder="说说今天的变化…"
                   value={text}
@@ -664,7 +664,7 @@ function App() {
                   }}
                 />
                 {needsExpand && !fullExpand && (
-                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center text-muted">
+                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
                     <Maximize2 size={18} />
                   </button>
                 )}
