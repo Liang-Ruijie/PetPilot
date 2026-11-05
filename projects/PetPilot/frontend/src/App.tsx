@@ -39,6 +39,23 @@ const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
 
 type DraftPhoto = { id: string; file: File; url: string }
 
+function PhotoImg({ id }: { id: number }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    let alive = true
+    const token = localStorage.getItem('petpilot_token') || ''
+    fetch(`/api/photos/${id}/file`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.blob() : Promise.reject()))
+      .then((b) => alive && setUrl(URL.createObjectURL(b)))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [id])
+  if (!url) return <div className="w-16 h-16 bg-subtle rounded-control shrink-0" />
+  return <img src={url} alt="" className="w-16 h-16 object-cover rounded-control shrink-0" />
+}
+
 function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [code, setCode] = useState('123456')
   const [err, setErr] = useState('')
@@ -141,7 +158,6 @@ function App() {
     return () => window.removeEventListener('petpilot-auth-expired', onExpired)
   }, [])
 
-  // 语音（按住说话）
   useEffect(() => {
     const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
     if (!SR) return
@@ -156,7 +172,7 @@ function App() {
     rec.onend = () => setListening(false)
     rec.onerror = () => {
       setListening(false)
-      alert('语音识别失败（可能未授权麦克风或网络问题），请用文字输入')
+      alert('语音识别不可用（需 HTTPS 或支持的浏览器），请用文字输入')
     }
     recognitionRef.current = rec
   }, [])
@@ -164,7 +180,7 @@ function App() {
   function startListening() {
     const rec = recognitionRef.current
     if (!rec) {
-      alert('语音识别在当前环境不可用（需 HTTPS 或支持的浏览器），请用文字输入')
+      alert('语音识别不可用（需 HTTPS 或支持的浏览器），请用文字输入')
       return
     }
     try {
@@ -228,6 +244,7 @@ function App() {
       ...add.map((f) => ({ id: `${Date.now()}-${Math.random()}`, file: f, url: URL.createObjectURL(f) })),
     ])
     setExpanded(true)
+    setShowPlus(false)
   }
 
   function removeDraftPhoto(id: string) {
@@ -350,7 +367,7 @@ function App() {
         </div>
       )}
 
-      <main ref={mainRef} onScroll={onMainScroll} className="flex-1 py-4 overflow-y-auto">
+      <main ref={mainRef} onScroll={onMainScroll} onClick={() => { if (expanded) { setExpanded(false); setShowPlus(false) } }} className="flex-1 py-4 overflow-y-auto">
         {view === 'chat' && (
           <div className="space-y-6">
             {messages.length === 0 && (
@@ -368,12 +385,9 @@ function App() {
                     {(m.photos && m.photos.length > 0) && (
                       <div className="flex gap-2 overflow-x-auto mb-2">
                         {m.photos.map((ph, i) => (
-                          <img
-                            key={i}
-                            src={ph.url || `/api/photos/${ph.id}/file`}
-                            alt=""
-                            className="w-20 h-20 object-cover rounded-control shrink-0"
-                          />
+                          ph.url
+                            ? <img key={i} src={ph.url} alt="" className="w-16 h-16 object-cover rounded-control shrink-0" />
+                            : <PhotoImg key={i} id={ph.id} />
                         ))}
                       </div>
                     )}
@@ -507,44 +521,20 @@ function App() {
         )}
       </main>
 
-      {!atBottom && view === 'chat' && (
-        <button
-          onClick={scrollToBottom}
-          aria-label="回到底部"
-          className="absolute bottom-24 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
-        >
-          <ArrowUp size={18} className="rotate-180" />
-        </button>
-      )}
-
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
-          {expanded && draftPhotos.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto mb-2 px-1">
-              {draftPhotos.map((p) => (
-                <div key={p.id} className="relative shrink-0">
-                  <img src={p.url} alt="" className="w-16 h-16 object-cover rounded-control" />
-                  <button
-                    onClick={() => removeDraftPhoto(p.id)}
-                    aria-label="移除照片"
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-ink text-white flex items-center justify-center"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {showPlus && (
-            <div className="flex gap-3 mb-2 px-1">
-              <button onClick={() => cameraRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-control bg-surface border border-line text-[14px] text-ink">
-                <Camera size={18} /> 拍照
-              </button>
-              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-control bg-surface border border-line text-[14px] text-ink">
-                <Image size={18} /> 照片
+          {!atBottom && (
+            <div className="flex justify-center mb-2">
+              <button
+                onClick={scrollToBottom}
+                aria-label="回到底部"
+                className="w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
+              >
+                <ArrowUp size={18} className="rotate-180" />
               </button>
             </div>
           )}
+
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
@@ -562,7 +552,7 @@ function App() {
               >
                 <Mic size={20} />
               </button>
-              <span className="flex-1 px-2 text-[16px] text-muted">发消息或按住说话…</span>
+              <span className="flex-1 px-1 text-[16px] text-muted leading-[40px]">发消息或按住说话…</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowPlus((v) => !v) }}
                 aria-label="添加"
@@ -572,10 +562,26 @@ function App() {
               </button>
             </div>
           ) : (
-            <div className="bg-surface border border-line rounded-composer shadow-composer p-1.5">
+            <div className="bg-surface border border-line rounded-composer shadow-composer p-2">
+              {draftPhotos.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 px-1">
+                  {draftPhotos.map((p) => (
+                    <div key={p.id} className="relative shrink-0">
+                      <img src={p.url} alt="" className="w-16 h-16 object-cover rounded-control" />
+                      <button
+                        onClick={() => removeDraftPhoto(p.id)}
+                        aria-label="移除照片"
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-ink text-white flex items-center justify-center"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <textarea
                 ref={taRef}
-                className="w-full bg-transparent px-3 py-2.5 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
+                className="w-full bg-transparent px-1 py-1 text-[16px] text-ink resize-none focus:outline-none max-h-[160px]"
                 rows={1}
                 placeholder="说说今天的变化…"
                 value={text}
@@ -597,10 +603,10 @@ function App() {
                 >
                   <Mic size={20} />
                 </button>
+                <div className="flex-1" />
                 <button onClick={() => setShowPlus((v) => !v)} aria-label="添加" className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-subtle text-ink">
                   <Plus size={20} />
                 </button>
-                <div className="flex-1" />
                 <button
                   onClick={send}
                   disabled={sending || (!text.trim() && draftPhotos.length === 0)}
@@ -613,6 +619,25 @@ function App() {
             </div>
           )}
         </footer>
+      )}
+
+      {showPlus && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowPlus(false)}>
+          <div className="absolute inset-0 bg-ink/40" />
+          <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-[760px] bg-surface rounded-t-2xl p-4 pb-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex gap-3">
+              <button onClick={() => cameraRef.current?.click()} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
+                <Camera size={24} />
+                <span className="text-[15px]">拍照</span>
+              </button>
+              <button onClick={() => fileRef.current?.click()} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
+                <Image size={24} />
+                <span className="text-[15px]">照片</span>
+              </button>
+            </div>
+            <button onClick={() => setShowPlus(false)} className="mt-3 w-full py-2 text-[15px] text-muted">取消</button>
+          </div>
+        </div>
       )}
 
       <nav className="bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around">
