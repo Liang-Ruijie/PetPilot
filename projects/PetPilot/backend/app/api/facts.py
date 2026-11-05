@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
 from app.models import Fact, HeldSegment, Pet
 
 router = APIRouter()
+
+
+class ResolveHeld(BaseModel):
+    pet_id: int
 
 
 @router.get("/facts")
@@ -62,3 +67,42 @@ def list_held(
             for h in helds
         ]
     }
+
+
+@router.post("/held/{held_id}/resolve")
+def resolve_held(
+    held_id: int,
+    body: ResolveHeld,
+    db: Session = Depends(get_db),
+    sess=Depends(get_current_session),
+):
+    h = db.query(HeldSegment).filter(
+        HeldSegment.id == held_id, HeldSegment.status == "pending"
+    ).first()
+    if not h:
+        raise HTTPException(
+            404, detail={"error": {"code": "HELD_NOT_FOUND", "message": "挂起片段不存在"}}
+        )
+    if not db.query(Pet).filter(Pet.id == body.pet_id).first():
+        raise HTTPException(
+            404, detail={"error": {"code": "PET_NOT_FOUND", "message": "猫不存在"}}
+        )
+    fact = Fact(
+        pet_id=body.pet_id,
+        topic=h.topic,
+        value=h.value,
+        unit=h.unit,
+        quantity_scope=h.quantity_scope,
+        historical_current=h.historical_current,
+        occurred_at=h.occurred_at,
+        polarity=h.polarity,
+        change_kind="new",
+        source_message_id=h.message_id,
+        quote=h.quote,
+        version=1,
+    )
+    db.add(fact)
+    h.status = "resolved"
+    h.resolved_pet_id = body.pet_id
+    db.commit()
+    return {"id": fact.id, "pet_id": fact.pet_id}

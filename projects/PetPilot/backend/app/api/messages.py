@@ -141,6 +141,7 @@ async def send_message(
             or f"是给{pet.name}" in text
             or f"给{pet.name}的" in text
             or f"归到{pet.name}" in text
+            or f"叫{pet.name}" in text
             or re.search(f"[他它她]是{pet.name}", text)
         ):
             clarified_pet = pet  # 不 break：口误更正时最后提到的猫优先
@@ -430,21 +431,22 @@ async def send_message(
                 f"「{pet_names.get(r.pet_id, '')}」{r.quote}" for r in linked[:3]
             )
             answer = f"好的，已关联提醒：{items}。"
-    elif "发送" in text or "发给" in text:
+    elif "发送" in text or "发给" in text or "外发" in text:
         answer = _SIMULATED_REPLY
     else:
         followups = []
         if any(rm.get("pet_name") is None for rm in reminder_results):
-            followups.append("有提醒还没指定是哪只猫，请问是给谁？")
+            followups.append("有提醒还没指定是哪只猫，请问是给谁？可稍后到「提醒」页处理")
         if helds:
-            followups.append(f"有 {len(helds)} 条记录还不确定是哪只猫，请告诉我是哪只猫的。")
+            followups.append(f"有 {len(helds)} 条记录还不确定是哪只猫，请告诉我是哪只猫的，或稍后到「记录-未确认」页手动补归属")
         if saved_photos and any(ph.pet_id is None for ph in saved_photos):
-            followups.append(f"有 {sum(1 for ph in saved_photos if ph.pet_id is None)} 张照片还不确定是哪只猫的，请告诉我。")
+            followups.append(f"有 {sum(1 for ph in saved_photos if ph.pet_id is None)} 张照片还不确定是哪只猫的，请告诉我")
         if unattributed_care:
             followups.append("请问是整理哪只猫的就医摘要？")
             answer = ""
         if followups:
-            answer = (answer + "\n" if answer else "") + "另外，" + "；".join(followups) + "（若暂时不确定，可稍后到相应页面处理。）"
+            content = "；".join(followups)
+            answer = (answer + "\n另外，" + content) if answer else content
 
     # 就医摘要文字直接进聊天（不再有独立摘要页）
     if care_results:

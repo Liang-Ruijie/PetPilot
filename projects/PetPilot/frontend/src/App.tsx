@@ -353,6 +353,22 @@ function App() {
     setTimeout(() => setCopiedId(null), 1500)
   }
 
+  async function resolveHeld(id: number) {
+    const name = prompt('归到哪只猫？')
+    if (!name) return
+    const pet = pets.find((p) => p.name === name.trim())
+    if (!pet) {
+      setErr('没有这只猫，请先建猫')
+      return
+    }
+    try {
+      await api(`/held/${id}/resolve`, { method: 'POST', body: JSON.stringify({ pet_id: pet.id }) })
+      refresh('records')
+    } catch (e: unknown) {
+      setErr((e as { message?: string }).message || '补归属失败')
+    }
+  }
+
   async function genWeekly() {
     setErr('')
     setWeeklyLoading(true)
@@ -514,9 +530,11 @@ function App() {
                       <span className="text-[12px] text-muted">PetPilot</span>
                     </div>
                     {m.content}
-                    <button onClick={() => copyText(m.id, m.content)} className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
-                      {copiedId === m.id ? <span>已复制</span> : <Copy size={13} />}
-                    </button>
+                    {m.content !== '正在思考…' && (
+                      <button onClick={() => copyText(m.id, m.content)} className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
+                        {copiedId === m.id ? <span>已复制</span> : <Copy size={13} />}
+                      </button>
+                    )}
                   </div>
                 </div>
               ),
@@ -557,8 +575,9 @@ function App() {
                     <div key={h.id} className="bg-surface border border-line rounded-card p-4">
                       <div className="text-[15px] text-ink">{h.quote}</div>
                       <div className="mt-1 text-[12px] text-muted">
-                        {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知（建猫后自动补归属）
+                        {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知
                       </div>
+                      <button onClick={() => resolveHeld(h.id)} className="mt-2 px-3 py-1.5 rounded-control bg-accent text-white text-[13px]">补归属</button>
                     </div>
                   ))}
                 </div>
@@ -716,6 +735,7 @@ function App() {
                   <Plus size={22} />
                 </button>
                 <button
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={send}
                   disabled={sending || (!text.trim() && draftPhotos.length === 0)}
                   aria-label="发送"
