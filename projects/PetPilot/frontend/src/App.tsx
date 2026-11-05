@@ -144,6 +144,7 @@ function App() {
   const recognitionRef = useRef<any>(null)
   const startYRef = useRef<number | null>(null)
   const cancelRef = useRef(false)
+  const atBottomRef = useRef(true)
 
   const load = useCallback(async () => {
     try {
@@ -368,12 +369,14 @@ function App() {
   function onMainScroll() {
     const el = mainRef.current
     if (!el) return
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
+    const atB = el.scrollHeight - el.scrollTop - el.clientHeight < 10
+    atBottomRef.current = atB
+    setAtBottom(atB)
   }
 
   useEffect(() => {
-    if (atBottom) scrollToBottom()
-  }, [messages, atBottom])
+    if (atBottomRef.current) scrollToBottom()
+  }, [messages])
 
   // 展开时自动聚焦唤起键盘（#2）
   useEffect(() => {
@@ -390,11 +393,15 @@ function App() {
     setNeedsExpand(h > 122)
   }, [text, expanded, fullExpand, view])
 
-  // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
+  // 回到聊天页/消息变化后，按真实滚动位置更新 ↓
   useEffect(() => {
     if (view === 'chat') {
       const el = mainRef.current
-      if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
+      if (el) {
+        const atB = el.scrollHeight - el.scrollTop - el.clientHeight < 10
+        atBottomRef.current = atB
+        setAtBottom(atB)
+      }
     }
   }, [view, messages])
 
