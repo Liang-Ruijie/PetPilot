@@ -130,6 +130,7 @@ function App() {
   const [listeningCancel, setListeningCancel] = useState(false)
   const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [recordsErr, setRecordsErr] = useState('')
   const [atBottom, setAtBottom] = useState(true)
   const [inputFocused, setInputFocused] = useState(false)
   const [needsExpand, setNeedsExpand] = useState(false)
@@ -358,14 +359,15 @@ function App() {
     if (!name) return
     const pet = pets.find((p) => p.name === name.trim())
     if (!pet) {
-      setErr('没有这只猫，请先建猫')
+      setRecordsErr('没有这只猫，请先建猫')
       return
     }
     try {
       await api(`/held/${id}/resolve`, { method: 'POST', body: JSON.stringify({ pet_id: pet.id }) })
+      setRecordsErr('')
       refresh('records')
     } catch (e: unknown) {
-      setErr((e as { message?: string }).message || '补归属失败')
+      setRecordsErr((e as { message?: string }).message || '补归属失败')
     }
   }
 
@@ -544,6 +546,7 @@ function App() {
               <button onClick={() => setRecordsTab('unconfirmed')} className={`text-[15px] ${recordsTab === 'unconfirmed' ? 'text-accent font-medium' : 'text-muted'}`}>未确认</button>
               <button onClick={() => setRecordsTab('confirmed')} className={`text-[15px] ${recordsTab === 'confirmed' ? 'text-accent font-medium' : 'text-muted'}`}>已确认</button>
             </div>
+            {recordsErr && <p className="mb-3 text-[13px] text-red-500">{recordsErr}</p>}
             {recordsTab === 'confirmed' ? (
               facts.length === 0 ? (
                 <p className="text-[15px] text-secondary">暂无记录。</p>
