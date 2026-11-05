@@ -39,7 +39,7 @@ const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
 
 type DraftPhoto = { id: string; file: File; url: string }
 
-function PhotoImg({ id }: { id: number }) {
+function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
   const [url, setUrl] = useState('')
   useEffect(() => {
     let alive = true
@@ -52,8 +52,8 @@ function PhotoImg({ id }: { id: number }) {
       alive = false
     }
   }, [id])
-  if (!url) return <div className="w-16 h-16 bg-subtle rounded-control shrink-0" />
-  return <img src={url} alt="" className="w-16 h-16 object-cover rounded-control shrink-0" />
+  if (!url) return <div className="flex-1 min-w-0 aspect-square bg-subtle rounded-control" />
+  return <img src={url} alt="" onClick={onPreview} className="flex-1 min-w-0 aspect-square object-cover rounded-control cursor-zoom-in" />
 }
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -131,6 +131,8 @@ function App() {
   const [listening, setListening] = useState(false)
   const [err, setErr] = useState('')
   const [atBottom, setAtBottom] = useState(true)
+  const [inputFocused, setInputFocused] = useState(false)
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null)
 
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -334,19 +336,38 @@ function App() {
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
   }
 
-  function scrollToBottom() {
-    const el = mainRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }
-
   useEffect(() => {
     if (atBottom) scrollToBottom()
   }, [messages, atBottom])
 
+  // 展开时自动聚焦唤起键盘（#2）
+  useEffect(() => {
+    if (expanded) taRef.current?.focus()
+  }, [expanded])
+
+  // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
+  useEffect(() => {
+    if (view === 'chat') {
+      const el = mainRef.current
+      if (el) setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 60)
+    }
+  }, [view, messages])
+
+  function scrollToBottom(smooth = false) {
+    const el = mainRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+  }
+
+  async function previewSentPhoto(id: number) {
+    const token = localStorage.getItem('petpilot_token') || ''
+    const r = await fetch(`/api/photos/${id}/file`, { headers: { Authorization: `Bearer ${token}` } })
+    if (r.ok) setPreviewPhoto(URL.createObjectURL(await r.blob()))
+  }
+
   if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden max-w-[760px] mx-auto px-4 sm:px-6">
+    <div className="h-dvh flex flex-col overflow-hidden max-w-[760px] mx-auto px-4 sm:px-6 relative">
       <header className="flex items-center justify-between h-[56px] shrink-0">
         <div className="flex items-center gap-2.5">
           <PawPrint size={26} className="text-accent" />
@@ -383,11 +404,11 @@ function App() {
                 <div key={m.id} className="flex justify-end">
                   <div className="max-w-[85%] bg-user-bg text-user-text rounded-bubble rounded-br-md px-4 py-3 text-[16px] leading-[1.65]">
                     {(m.photos && m.photos.length > 0) && (
-                      <div className="flex gap-2 overflow-x-auto mb-2">
+                      <div className="flex gap-2 mb-3">
                         {m.photos.map((ph, i) => (
                           ph.url
-                            ? <img key={i} src={ph.url} alt="" className="w-16 h-16 object-cover rounded-control shrink-0" />
-                            : <PhotoImg key={i} id={ph.id} />
+                            ? <img key={i} src={ph.url} alt="" onClick={() => setPreviewPhoto(ph.url!)} className="flex-1 min-w-0 aspect-square object-cover rounded-control cursor-zoom-in" />
+                            : <PhotoImg key={i} id={ph.id} onPreview={() => previewSentPhoto(ph.id)} />
                         ))}
                       </div>
                     )}
@@ -523,18 +544,6 @@ function App() {
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
-          {!atBottom && (
-            <div className="flex justify-center mb-2">
-              <button
-                onClick={scrollToBottom}
-                aria-label="回到底部"
-                className="w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
-              >
-                <ArrowUp size={18} className="rotate-180" />
-              </button>
-            </div>
-          )}
-
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
@@ -564,14 +573,14 @@ function App() {
           ) : (
             <div className="bg-surface border border-line rounded-composer shadow-composer p-2">
               {draftPhotos.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-2 px-1">
+                <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
-                    <div key={p.id} className="relative shrink-0">
-                      <img src={p.url} alt="" className="w-16 h-16 object-cover rounded-control" />
+                    <div key={p.id} className="relative flex-1 aspect-square min-w-0">
+                      <img src={p.url} alt="" onClick={() => setPreviewPhoto(p.url)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
                       <button
                         onClick={() => removeDraftPhoto(p.id)}
                         aria-label="移除照片"
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-ink text-white flex items-center justify-center"
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/70 text-white flex items-center justify-center"
                       >
                         <X size={12} />
                       </button>
@@ -586,6 +595,11 @@ function App() {
                 placeholder="说说今天的变化…"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => {
+                  setInputFocused(false)
+                  if (!text.trim() && draftPhotos.length === 0) setExpanded(false)
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -640,7 +654,23 @@ function App() {
         </div>
       )}
 
-      <nav className="bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around">
+      {!atBottom && view === 'chat' && !inputFocused && (
+        <button
+          onClick={() => scrollToBottom(true)}
+          aria-label="回到底部"
+          className="absolute bottom-[150px] left-1/2 -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
+        >
+          <ArrowUp size={18} className="rotate-180" />
+        </button>
+      )}
+
+      {previewPhoto && (
+        <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center" onClick={() => setPreviewPhoto(null)}>
+          <img src={previewPhoto} alt="" className="max-w-full max-h-full object-contain" />
+        </div>
+      )}
+
+      <nav className={`bg-canvas border-t border-line pb-2 pt-2 shrink-0 flex justify-around ${inputFocused ? 'hidden' : ''}`}>
         {VIEWS.map((v) => {
           const Icon = v.icon
           const active = view === v.key

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_session, get_db
-from app.models import Fact, HeldSegment, Pet
+from app.models import Fact, HeldSegment, Pet, Reminder
 from app.schemas import PetCreate, PetOut
 from app.services.attribution import mention_count
 
@@ -58,6 +58,13 @@ def create_pet(
             )
             h.status = "resolved"
             h.resolved_pet_id = pet.id
+
+    # 补归属：待补对象的提醒（quote 提到这只猫名）也归到它
+    for rem in db.query(Reminder).filter(
+        Reminder.status == "pending", Reminder.pet_id.is_(None)
+    ).all():
+        if mention_count(name, rem.quote) >= 1:
+            rem.pet_id = pet.id
 
     db.commit()
     db.refresh(pet)

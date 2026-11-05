@@ -186,3 +186,19 @@ def test_photo_in_message_unattributed(client, auth, monkeypatch):
     )
     data = r.json()
     assert data["photos"][0]["pet_name"] is None  # 未指定猫 → 照片挂起
+
+
+def test_create_pet_assigns_pending_reminder(client, auth, monkeypatch):
+    monkeypatch.setattr(
+        ModelClient, "extract",
+        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+            "operations": [],
+            "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天给贝塔称重"}]},
+        },
+    )
+    r = client.post("/api/messages", data={"text": "明天给贝塔称重"}, headers=auth)
+    assert r.json()["reminders"][0]["pet_name"] is None  # 贝塔未建档
+
+    client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
+    reminders = client.get("/api/reminders", headers=auth).json()["reminders"]
+    assert reminders[0]["pet_name"] == "贝塔"  # 建档后自动关联

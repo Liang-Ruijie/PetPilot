@@ -415,6 +415,16 @@ async def send_message(
         if resolved_reminder_count:
             parts.append(f"{resolved_reminder_count} 个提醒")
         answer = f"好的，已把 {'、'.join(parts)} 归到「{clarified_pet.name}」。"
+    elif "建好" in text:
+        # 主人说"建好了"：确认已关联到猫的提醒
+        linked = db.query(Reminder).filter(
+            Reminder.status == "pending", Reminder.pet_id.isnot(None)
+        ).all()
+        if linked:
+            items = "、".join(
+                f"「{pet_names.get(r.pet_id, '')}」{r.quote}" for r in linked[:3]
+            )
+            answer = f"好的，已关联提醒：{items}。"
     else:
         followups = []
         if any(rm.get("pet_name") is None for rm in reminder_results):
