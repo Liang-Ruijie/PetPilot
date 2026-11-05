@@ -648,7 +648,7 @@ function App() {
           {!expanded ? (
             <div
               onClick={() => { setExpanded(true); requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus())) }}
-              className="flex items-center gap-2 bg-surface rounded-composer shadow-composer p-1.5 cursor-text"
+              className="flex items-center gap-2 bg-surface rounded-full shadow-composer p-1.5 cursor-text"
             >
               <button
                 onPointerDown={micDown}
