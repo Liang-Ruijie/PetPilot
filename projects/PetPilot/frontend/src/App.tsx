@@ -119,7 +119,7 @@ function App() {
   const [held, setHeld] = useState<Held[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [weeklies, setWeeklies] = useState<WeeklyReview[]>([])
-  const [recordsTab, setRecordsTab] = useState<'confirmed' | 'unconfirmed'>('confirmed')
+  const [recordsTab, setRecordsTab] = useState<'confirmed' | 'unconfirmed'>('unconfirmed')
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [text, setText] = useState('')
   const [draftPhotos, setDraftPhotos] = useState<DraftPhoto[]>([])
