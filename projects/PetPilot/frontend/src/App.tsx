@@ -778,8 +778,8 @@ function App() {
       )}
 
       {listening && (
-        <div className={`fixed inset-x-0 bottom-0 z-[58] h-1/3 pointer-events-none flex items-center justify-center bg-gradient-to-t ${listeningCancel ? 'from-pink-200 via-pink-200/60 to-transparent' : 'from-pink-200 via-pink-200/60 to-transparent'}`}>
-          <p className={`text-[17px] font-bold ${listeningCancel ? 'text-red-500' : 'text-red-500'}`}>{listeningCancel ? '松手取消' : '松手发送，上移取消'}</p>
+        <div className={`fixed inset-x-0 bottom-0 z-[58] h-1/4 pointer-events-none flex items-start justify-center pt-6 bg-gradient-to-t ${listeningCancel ? 'from-[#FE5F96] to-transparent' : 'from-[#2CDEB8] to-transparent'}`}>
+          <p className={`text-[17px] font-bold ${listeningCancel ? 'text-[#DE2C46]' : 'text-[#000000]'}`}>{listeningCancel ? '松手取消' : '松手发送，上移取消'}</p>
         </div>
       )}
 
