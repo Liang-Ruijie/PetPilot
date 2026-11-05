@@ -51,7 +51,7 @@ function SoundWaveIcon({ size = 20 }: { size?: number }) {
   )
 }
 
-function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
+function PhotoImg({ id, onPreview }: { id: number; onPreview?: (el: HTMLElement) => void }) {
   const [url, setUrl] = useState('')
   useEffect(() => {
     let alive = true
@@ -65,7 +65,7 @@ function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
     }
   }, [id])
   if (!url) return <div className="w-20 h-20 bg-subtle rounded-control shrink-0" />
-  return <img src={url} alt="" onClick={onPreview} className="w-20 h-20 object-cover rounded-control cursor-zoom-in shrink-0 border border-black/5" />
+  return <img src={url} alt="" onClick={(e) => onPreview?.(e.currentTarget)} className="w-20 h-20 object-cover rounded-control cursor-zoom-in shrink-0 border border-black/5" />
 }
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -405,10 +405,10 @@ function App() {
     setTimeout(() => setPreview(null), 300)
   }
 
-  async function previewSentPhoto(id: number) {
+  async function previewSentPhoto(id: number, el?: HTMLElement) {
     const token = localStorage.getItem('petpilot_token') || ''
     const r = await fetch(`/api/photos/${id}/file`, { headers: { Authorization: `Bearer ${token}` } })
-    if (r.ok) openPreview(URL.createObjectURL(await r.blob()))
+    if (r.ok) openPreview(URL.createObjectURL(await r.blob()), el)
   }
 
   if (!authed) return <LoginPage onLogin={() => setAuthed(true)} />
@@ -456,7 +456,7 @@ function App() {
                         {m.photos.map((ph, i) => (
                           ph.url
                             ? <img key={i} src={ph.url} alt="" onClick={(e) => openPreview(ph.url!, e.currentTarget)} className="w-20 h-20 object-cover rounded-control cursor-zoom-in shrink-0 border border-black/5" />
-                            : <PhotoImg key={i} id={ph.id} onPreview={() => previewSentPhoto(ph.id)} />
+                            : <PhotoImg key={i} id={ph.id} onPreview={(el) => previewSentPhoto(ph.id, el)} />
                         ))}
                       </div>
                     </div>
@@ -639,9 +639,9 @@ function App() {
               </button>
             </div>
           ) : (
-            <div className="relative bg-surface rounded-composer shadow-composer p-2">
+            <div className="relative bg-surface rounded-composer shadow-composer">
               {draftPhotos.length > 0 && (
-                <div className="flex gap-2 pb-2 px-1">
+                <div className="flex gap-2 px-2 pt-2">
                   {draftPhotos.map((p) => (
                     <div key={p.id} className="relative w-[calc((100%-32px)/5)] aspect-square shrink-0">
                       <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
@@ -656,7 +656,7 @@ function App() {
                   ))}
                 </div>
               )}
-              <div className="relative py-2">
+              <div className="relative px-2 py-2">
                 <textarea
                   ref={taRef}
                   className={`w-full bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand ? 'pr-10' : ''}`}
@@ -677,12 +677,12 @@ function App() {
                   }}
                 />
                 {needsExpand && !fullExpand && (
-                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
-                    <Maximize2 size={18} />
+                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 h-6 w-6 flex items-center justify-center text-[#a3a3a3]">
+                    <Maximize2 size={16} />
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-2 pb-2">
                 <button
                   onPointerDown={(e) => { e.preventDefault(); startListening() }}
                   onPointerUp={stopListening}
@@ -749,7 +749,7 @@ function App() {
       })()}
 
       {fullExpand && (
-        <div className={`fixed inset-0 z-[55] bg-canvas flex flex-col transition-all duration-300 ease-out ${fullExpandOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+        <div className={`fixed inset-0 z-[55] bg-canvas flex flex-col transition-transform duration-300 ease-out ${fullExpandOpen ? 'scale-100' : 'scale-95'}`}>
           <div className="flex items-center justify-end h-[56px] px-4 shrink-0">
             <button onClick={closeFullExpand} aria-label="收起" className="w-10 h-10 flex items-center justify-center text-[#a3a3a3]">
               <Minimize2 size={20} />
