@@ -394,11 +394,6 @@ function App() {
     if (atBottomRef.current) scrollToBottom()
   }, [messages])
 
-  // 展开时自动聚焦唤起键盘（#2）
-  useEffect(() => {
-    if (expanded) taRef.current?.focus()
-  }, [expanded])
-
   // 输入框自适应高度：最多 5 行（120px），超出显示展开按钮
   useEffect(() => {
     const el = taRef.current
@@ -652,7 +647,7 @@ function App() {
 
           {!expanded ? (
             <div
-              onClick={() => { setExpanded(true); setTimeout(() => taRef.current?.focus(), 0) }}
+              onClick={() => { setExpanded(true); requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus())) }}
               className="flex items-center gap-2 bg-surface rounded-composer shadow-composer p-1.5 cursor-text"
             >
               <button

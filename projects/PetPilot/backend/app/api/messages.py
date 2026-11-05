@@ -437,6 +437,8 @@ async def send_message(
         followups = []
         if any(rm.get("pet_name") is None for rm in reminder_results):
             followups.append("有提醒还没指定是哪只猫，请问是给谁？可稍后到「提醒」页处理")
+        if any(rm.get("due_at") is None for rm in reminder_results):
+            followups.append("有提醒还没指定具体时间，请问是几点？可稍后到「提醒」页处理")
         if helds:
             followups.append(f"有 {len(helds)} 条记录还不确定是哪只猫，请告诉我是哪只猫的，或稍后到「记录-未确认」页手动补归属")
         if saved_photos and any(ph.pet_id is None for ph in saved_photos):
