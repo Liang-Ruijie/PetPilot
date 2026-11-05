@@ -778,13 +778,8 @@ function App() {
       )}
 
       {listening && (
-        <div className={`fixed inset-x-0 bottom-0 z-[58] h-1/3 pointer-events-none flex flex-col items-center justify-end pb-16 bg-gradient-to-t ${listeningCancel ? 'from-red-500/80 via-red-500/25 to-transparent' : 'from-accent/80 via-accent/25 to-transparent'}`}>
-          <div className="flex gap-1.5 items-end">
-            {[...Array(7)].map((_, i) => (
-              <div key={i} className="w-1.5 rounded-full bg-white animate-pulse" style={{ height: `${10 + (i % 4) * 9}px`, animationDelay: `${i * 0.12}s` }} />
-            ))}
-          </div>
-          <p className="mt-3 text-white text-[14px]">{listeningCancel ? '松手取消' : '松手发送，上移取消'}</p>
+        <div className={`fixed inset-x-0 bottom-0 z-[58] h-1/3 pointer-events-none flex items-center justify-center bg-gradient-to-t ${listeningCancel ? 'from-pink-200/90 via-pink-200/30 to-transparent' : 'from-emerald-400/85 via-emerald-400/30 to-transparent'}`}>
+          <p className={`text-[16px] font-medium ${listeningCancel ? 'text-red-500' : 'text-black'}`}>{listeningCancel ? '松手取消' : '松手发送，上移取消'}</p>
         </div>
       )}
 
