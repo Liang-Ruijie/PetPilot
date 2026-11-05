@@ -394,6 +394,17 @@ function App() {
     setTimeout(() => setFullExpand(false), 300)
   }
 
+  function openFilePicker(kind: 'camera' | 'photo') {
+    setShowPlus(false)
+    // 先收键盘，让系统选择器贴底弹出
+    taRef.current?.blur()
+    const ae = document.activeElement as HTMLElement | null
+    ae?.blur?.()
+    setTimeout(() => {
+      if (kind === 'camera') cameraRef.current?.click()
+      else fileRef.current?.click()
+    }, 150)
+  }
   function openPreview(url: string, el?: HTMLElement) {
     const r = el?.getBoundingClientRect()
     setPreview({ url, rect: r ? { top: r.top, left: r.left, width: r.width, height: r.height } : undefined, open: false })
@@ -715,11 +726,11 @@ function App() {
           <div className="absolute inset-0 bg-ink/40" />
           <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-[760px] bg-surface rounded-t-2xl p-4 pb-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex gap-3">
-              <button onClick={() => cameraRef.current?.click()} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
+              <button onClick={() => openFilePicker('camera')} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
                 <Camera size={24} />
                 <span className="text-[15px]">拍照</span>
               </button>
-              <button onClick={() => fileRef.current?.click()} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
+              <button onClick={() => openFilePicker('photo')} className="flex-1 flex flex-col items-center gap-2 py-5 rounded-control bg-subtle text-ink">
                 <Image size={24} />
                 <span className="text-[15px]">照片</span>
               </button>
