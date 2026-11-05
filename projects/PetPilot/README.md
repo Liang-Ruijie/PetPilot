@@ -4,7 +4,7 @@
 
 ## 当前进度
 
-阶段 2-3（周回顾 + 收口）开发完成。详细进度见 `docs/项目状态.md`。
+阶段 3 正式前端完成（含收尾修复）。下一步做"记忆承接"小增强（最近对话上下文），设计见 `docs/阶段文档/记忆承接设计说明.md`。详细进度见 `docs/项目状态.md`。
 
 ## 启动方法（本机）
 
@@ -34,7 +34,7 @@ cd backend && source .venv/bin/activate && MODEL_API_KEY="" python -m pytest -q
 cd frontend && npm test -- --run && npm run lint && npm run build
 
 # 全套自检（在工具包根目录）
-./verify.sh PetPilot 阶段3-1
+./verify.sh PetPilot 阶段3-3
 ```
 
 ## 环境变量（backend/.env，从 .env.example 复制）
