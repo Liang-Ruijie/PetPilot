@@ -364,8 +364,8 @@ function App() {
     if (!el) return
     el.style.height = 'auto'
     const h = el.scrollHeight
-    el.style.height = Math.min(h, 152) + 'px'
-    setNeedsExpand(h > 154)
+    el.style.height = Math.min(h, 120) + 'px'
+    setNeedsExpand(h > 122)
   }, [text, expanded, fullExpand, view])
 
   // 回到聊天页/消息变化后，按真实滚动位置更新 ↓（#10）
@@ -643,10 +643,10 @@ function App() {
                   ))}
                 </div>
               )}
-              <div className="relative">
+              <div className="relative py-2.5">
                 <textarea
                   ref={taRef}
-                  className={`w-full bg-transparent px-1 py-4 text-[16px] leading-6 text-ink resize-none focus:outline-none ${needsExpand ? 'pr-10' : ''}`}
+                  className={`w-full bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand ? 'pr-10' : ''}`}
                   rows={1}
                   placeholder="说说今天的变化…"
                   value={text}
@@ -664,7 +664,7 @@ function App() {
                   }}
                 />
                 {needsExpand && !fullExpand && (
-                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
+                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-2.5 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
                     <Maximize2 size={18} />
                   </button>
                 )}
