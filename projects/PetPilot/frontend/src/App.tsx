@@ -110,17 +110,6 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
   )
 }
 
-function SectionTitle({ title, onClose }: { title: string; onClose: () => void }) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <h2 className="text-[22px] font-semibold text-ink">{title}</h2>
-      <button onClick={onClose} aria-label="返回对话" className="min-w-[44px] min-h-[44px] flex items-center justify-center text-secondary">
-        <X size={20} />
-      </button>
-    </div>
-  )
-}
-
 function App() {
   const [authed, setAuthed] = useState(!!localStorage.getItem('petpilot_token'))
   const [view, setView] = useState<View>('chat')
@@ -138,6 +127,8 @@ function App() {
   const [showPlus, setShowPlus] = useState(false)
   const [sending, setSending] = useState(false)
   const [listening, setListening] = useState(false)
+  const [listeningCancel, setListeningCancel] = useState(false)
+  const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [err, setErr] = useState('')
   const [atBottom, setAtBottom] = useState(true)
   const [inputFocused, setInputFocused] = useState(false)
@@ -151,6 +142,8 @@ function App() {
   const cameraRef = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
+  const startYRef = useRef<number | null>(null)
+  const cancelRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -204,14 +197,35 @@ function App() {
       setListening(false)
     }
   }
-  function stopListening() {
+  function stopListening(cancel = false) {
     const rec = recognitionRef.current
-    if (!rec || !listening) return
-    try {
-      rec.stop()
-    } catch {
-      /* ignore */
+    if (cancel && rec) {
+      try { rec.abort() } catch { /* ignore */ }
+    } else if (rec) {
+      try { rec.stop() } catch { /* ignore */ }
     }
+    setListening(false)
+    setListeningCancel(false)
+    startYRef.current = null
+  }
+
+  function micDown(e: React.PointerEvent) {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    startYRef.current = e.clientY
+    cancelRef.current = false
+    setListeningCancel(false)
+    startListening()
+  }
+  function micMove(e: React.PointerEvent) {
+    if (listening && startYRef.current !== null) {
+      const cancel = startYRef.current - e.clientY > 60
+      cancelRef.current = cancel
+      setListeningCancel(cancel)
+    }
+  }
+  function micUp() {
+    stopListening(cancelRef.current)
   }
 
   async function refresh(v: View) {
@@ -340,11 +354,14 @@ function App() {
 
   async function genWeekly() {
     setErr('')
+    setWeeklyLoading(true)
     try {
       await api('/weekly-review', { method: 'POST', body: JSON.stringify({}) })
       refresh('mine')
     } catch (e: unknown) {
       setErr((e as { message?: string }).message || '生成失败')
+    } finally {
+      setWeeklyLoading(false)
     }
   }
 
@@ -431,9 +448,11 @@ function App() {
     <div className="h-dvh flex flex-col overflow-hidden max-w-[760px] mx-auto px-4 sm:px-6 relative">
       <header className="flex items-center justify-between h-[56px] shrink-0">
         <span className="text-[20px] font-semibold text-ink">PetPilot</span>
-        <button onClick={addPet} className="flex items-center gap-1 text-[14px] text-accent font-medium min-h-[44px] px-2">
-          <Plus size={16} /> 建猫
-        </button>
+        {view === 'chat' && (
+          <button onClick={addPet} className="flex items-center gap-1 text-[14px] text-accent font-medium min-h-[44px] px-2">
+            <Plus size={16} /> 建猫
+          </button>
+        )}
       </header>
 
       {pets.length > 0 && view === 'chat' && (
@@ -489,7 +508,7 @@ function App() {
                     </div>
                     {m.content}
                     <button onClick={() => copyText(m.id, m.content)} className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
-                      <Copy size={13} /> {copiedId === m.id ? '已复制' : '复制'}
+                      {copiedId === m.id ? <span>已复制</span> : <Copy size={13} />}
                     </button>
                   </div>
                 </div>
@@ -501,10 +520,9 @@ function App() {
 
         {view === 'records' && (
           <div>
-            <SectionTitle title="记录" onClose={() => setView('chat')} />
-            <div className="flex gap-2 mb-3">
-              <button onClick={() => setRecordsTab('confirmed')} className={`flex-1 py-2 rounded-control text-[14px] ${recordsTab === 'confirmed' ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}>已确认</button>
-              <button onClick={() => setRecordsTab('unconfirmed')} className={`flex-1 py-2 rounded-control text-[14px] ${recordsTab === 'unconfirmed' ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}>未确认</button>
+            <div className="flex items-center gap-5 mb-3">
+              <button onClick={() => setRecordsTab('unconfirmed')} className={`text-[15px] ${recordsTab === 'unconfirmed' ? 'text-accent font-medium' : 'text-muted'}`}>未确认</button>
+              <button onClick={() => setRecordsTab('confirmed')} className={`text-[15px] ${recordsTab === 'confirmed' ? 'text-accent font-medium' : 'text-muted'}`}>已确认</button>
             </div>
             {recordsTab === 'confirmed' ? (
               facts.length === 0 ? (
@@ -544,7 +562,6 @@ function App() {
 
         {view === 'reminders' && (
           <div>
-            <SectionTitle title="提醒" onClose={() => setView('chat')} />
             {reminders.length === 0 ? (
               <p className="text-[15px] text-secondary">暂无提醒。</p>
             ) : (
@@ -574,7 +591,7 @@ function App() {
 
         {view === 'mine' && (
           <div>
-            <button onClick={genWeekly} className="px-4 py-2 rounded-control bg-accent text-white text-[14px]">生成周回顾</button>
+            <button onClick={genWeekly} disabled={weeklyLoading} className="px-4 py-2 rounded-control bg-accent text-white text-[14px] disabled:opacity-60">{weeklyLoading ? '生成中…' : '生成周回顾'}</button>
             <div className="mt-4 space-y-3">
               {weeklies.length === 0 ? (
                 <p className="text-[15px] text-secondary">暂无周回顾。</p>
@@ -613,9 +630,10 @@ function App() {
               className="flex items-center gap-2 bg-surface rounded-composer shadow-composer p-1.5 cursor-text"
             >
               <button
-                onPointerDown={(e) => { e.preventDefault(); startListening() }}
-                onPointerUp={stopListening}
-                onPointerLeave={stopListening}
+                onPointerDown={micDown}
+                onPointerMove={micMove}
+                onPointerUp={micUp}
+                onPointerLeave={micUp}
                 aria-label="按住说话"
                 className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
               >
@@ -677,9 +695,10 @@ function App() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onPointerDown={(e) => { e.preventDefault(); startListening() }}
-                  onPointerUp={stopListening}
-                  onPointerLeave={stopListening}
+                  onPointerDown={micDown}
+                onPointerMove={micMove}
+                  onPointerUp={micUp}
+                  onPointerLeave={micUp}
                   aria-label="按住说话"
                   className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
                 >
@@ -755,6 +774,17 @@ function App() {
             onChange={(e) => setText(e.target.value)}
             placeholder="说说今天的变化…"
           />
+        </div>
+      )}
+
+      {listening && (
+        <div className={`fixed inset-x-0 bottom-0 z-[58] h-1/3 pointer-events-none flex flex-col items-center justify-end pb-16 bg-gradient-to-t ${listeningCancel ? 'from-red-500/80 via-red-500/25 to-transparent' : 'from-accent/80 via-accent/25 to-transparent'}`}>
+          <div className="flex gap-1.5 items-end">
+            {[...Array(7)].map((_, i) => (
+              <div key={i} className="w-1.5 rounded-full bg-white animate-pulse" style={{ height: `${10 + (i % 4) * 9}px`, animationDelay: `${i * 0.12}s` }} />
+            ))}
+          </div>
+          <p className="mt-3 text-white text-[14px]">{listeningCancel ? '松手取消' : '松手发送，上移取消'}</p>
         </div>
       )}
 

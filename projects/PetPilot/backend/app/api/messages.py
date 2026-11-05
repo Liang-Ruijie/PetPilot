@@ -457,9 +457,7 @@ async def send_message(
     ]
 
     receipt = _receipt(facts, helds, correction_results, reminder_results, care_results, len(photo_results), len(resolved_facts))
-    assistant_text = receipt
-    if answer:
-        assistant_text = f"{receipt}\n{answer}"
+    assistant_text = f"{answer}\n\n{receipt}" if answer else receipt
     db.add(Message(role="assistant", content=assistant_text))
     db.commit()
 
