@@ -615,7 +615,7 @@ function App() {
               <ChevronDown size={18} />
             </button>
           )}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-b from-transparent to-canvas" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-b from-transparent to-canvas" />
       </div>
 
       {view === 'chat' && (
