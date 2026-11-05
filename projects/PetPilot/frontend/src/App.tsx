@@ -130,7 +130,7 @@ function App() {
   const [listeningCancel, setListeningCancel] = useState(false)
   const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [err, setErr] = useState('')
-  const [recordsErr, setRecordsErr] = useState('')
+  const [heldErr, setHeldErr] = useState<{ id: number; msg: string } | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [inputFocused, setInputFocused] = useState(false)
   const [needsExpand, setNeedsExpand] = useState(false)
@@ -359,15 +359,17 @@ function App() {
     if (!name) return
     const pet = pets.find((p) => p.name === name.trim())
     if (!pet) {
-      setRecordsErr('没有这只猫，请先建猫')
+      setHeldErr({ id, msg: '没有这只猫，请先建猫' })
+      setTimeout(() => setHeldErr(null), 3000)
       return
     }
     try {
       await api(`/held/${id}/resolve`, { method: 'POST', body: JSON.stringify({ pet_id: pet.id }) })
-      setRecordsErr('')
+      setHeldErr(null)
       refresh('records')
     } catch (e: unknown) {
-      setRecordsErr((e as { message?: string }).message || '补归属失败')
+      setHeldErr({ id, msg: (e as { message?: string }).message || '补归属失败' })
+      setTimeout(() => setHeldErr(null), 3000)
     }
   }
 
@@ -546,7 +548,6 @@ function App() {
               <button onClick={() => setRecordsTab('unconfirmed')} className={`text-[15px] ${recordsTab === 'unconfirmed' ? 'text-accent font-medium' : 'text-muted'}`}>未确认</button>
               <button onClick={() => setRecordsTab('confirmed')} className={`text-[15px] ${recordsTab === 'confirmed' ? 'text-accent font-medium' : 'text-muted'}`}>已确认</button>
             </div>
-            {recordsErr && <p className="mb-3 text-[13px] text-red-500">{recordsErr}</p>}
             {recordsTab === 'confirmed' ? (
               facts.length === 0 ? (
                 <p className="text-[15px] text-secondary">暂无记录。</p>
@@ -576,6 +577,7 @@ function App() {
                         {h.topic ? `${h.topic}${h.value != null ? ` ${h.value}${h.unit || ''}` : ''} · ` : ''}归属未知
                       </div>
                       <button onClick={() => resolveHeld(h.id)} className="mt-2 px-3 py-1.5 rounded-control bg-accent text-white text-[13px]">补归属</button>
+                      {heldErr?.id === h.id && <p className="mt-2 text-[13px] text-red-500">{heldErr.msg}</p>}
                     </div>
                   ))}
                 </div>
