@@ -45,6 +45,21 @@ def _extract_text(val):
     return ""
 
 
+def _build_history(db: Session, max_chars: int = 6000) -> list[dict]:
+    """取最近 user/assistant 消息（时间正序，不含当前消息），合计不超过 max_chars，从最早裁。"""
+    rows = db.query(Message).order_by(Message.id.desc()).limit(20).all()
+    picked: list[dict] = []
+    total = 0
+    for m in rows:  # rows 已按最新在前
+        c = m.content or ""
+        if total + len(c) > max_chars and picked:
+            break
+        picked.append({"role": m.role, "content": c})
+        total += len(c)
+    picked.reverse()
+    return picked
+
+
 def _receipt(facts, held, corrections, reminders, cares, photos=0, resolved=0) -> str:
     parts = []
     if facts:
@@ -81,7 +96,19 @@ async def send_message(
     pet_names = {p.id: p.name for p in pets}
     allowed_ids = set(pet_names.keys())
 
-    recent_facts = db.query(Fact).order_by(Fact.id.desc()).limit(20).all()
+    # 最近对话历史（供模型理解指代与承接；当前消息尚未保存，不会重复）
+    history = _build_history(db)
+
+    # 最近事实：按猫分组，当前消息提到的猫优先，每只猫最多 8 条，总量 20 条
+    mentioned_ids = {p.id for p in pets if mention_count(p.name, text) >= 1}
+    buckets: dict[int, list[Fact]] = {}
+    for f in db.query(Fact).order_by(Fact.id.desc()).limit(60).all():
+        buckets.setdefault(f.pet_id, []).append(f)
+    flat_facts: list[Fact] = []
+    for pid in sorted(buckets, key=lambda x: (x not in mentioned_ids, x)):
+        flat_facts.extend(buckets[pid][:8])
+        if len(flat_facts) >= 20:
+            break
     facts_context = [
         {
             "id": f.id,
@@ -92,7 +119,7 @@ async def send_message(
             "quote": f.quote,
             "version": f.version,
         }
-        for f in recent_facts
+        for f in flat_facts[:20]
     ]
     held_context = [
         {"id": h.id, "quote": h.quote, "topic": h.topic, "value": h.value, "unit": h.unit}
@@ -119,7 +146,7 @@ async def send_message(
     raw = {"operations": [], "dialogue": {}}
     if text:
         try:
-            raw = ModelClient().extract(text, pets, facts_context, held_context, photo_count)
+            raw = ModelClient().extract(text, pets, facts_context, held_context, photo_count, history)
         except SchemaError as e:
             raise HTTPException(
                 502, detail={"error": {"code": "SCHEMA_INVALID", "message": str(e)}}
@@ -331,8 +358,10 @@ async def send_message(
     for cr in dialogue.get("care_requests", []):
         pid = cr.get("pet_id")
         mentioned = [p for p in pets if mention_count(p.name, text) >= 1]
-        if pid in allowed_ids and pid in {p.id for p in mentioned}:
-            pass
+        if pid in allowed_ids and (pid in {p.id for p in mentioned} or len(pets) == 1):
+            pass  # 有效 pid 且（当前提到它 或 只有一只猫）
+        elif len(pets) == 1:
+            pid = pets[0].id  # 单猫：模型没给有效 pid，用唯一猫
         elif len(mentioned) == 1:
             pid = mentioned[0].id
         else:

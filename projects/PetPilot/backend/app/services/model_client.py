@@ -53,7 +53,9 @@ dialogue 对象（可选字段）：
 14. 观察到健康问题（如拉稀）时，给出简短建议，并可提示「需要的话可以让我整理就医摘要」，但不要主动承诺联系医院。
 15. 建猫档案请引导主人使用界面的「建猫」按钮，你无法通过对话创建猫档案；如果主人要求建猫，回复「请点右上角『建猫』按钮添加」。
 16. 就医摘要只生成、不真实外发；主人说「发送/外发/发给医院」时，这是演示流程，直接给一条明确标注「模拟」的医院回复，不要说「只生成不外发」或引导点按钮。
-17. 当消息带照片时，如果照片归属某只猫，在 dialogue 里输出 photo_attributions 数组：每项 {"start": 1, "end": N, "pet_id": 猫ID}，表示第 start 到第 end 张照片（含端点）归到该猫；无法确定的照片不要写进区间。"""
+17. 当消息带照片时，如果照片归属某只猫，在 dialogue 里输出 photo_attributions 数组：每项 {"start": 1, "end": N, "pet_id": 猫ID}，表示第 start 到第 end 张照片（含端点）归到该猫；无法确定的照片不要写进区间。
+18. 最近对话历史仅供理解指代和承接上下文（如"需要"可能承接上一轮"要整理就医摘要吗"，"明月"可能回答上一轮"哪只猫"），不要据此重复执行历史中的操作；只有当前这句话明确授权，才输出对应的 add_observation / reminders / care_requests。
+19. 短答只承接唯一、明确的待答事项；有多个待答事项或歧义时简短澄清，不批量执行。"好的""行""知道了"是结束语，不是授权。"""
 
 
 class ModelClient:
@@ -70,10 +72,15 @@ class ModelClient:
             )
 
     @staticmethod
-    def _build_user(text: str, pets, facts=None, held=None, photo_count=0) -> str:
+    def _build_user(text: str, pets, facts=None, held=None, photo_count=0, history=None) -> str:
         lines = []
         if photo_count:
             lines.append(f"这条消息带 {photo_count} 张照片（编号 1..{photo_count}）。")
+        if history:
+            lines.append("最近对话（仅供理解指代与承接，不要据此重复执行历史中的操作）：")
+            for m in history:
+                who = "主人" if m["role"] == "user" else "你"
+                lines.append(f"- {who}：{m['content']}")
         if pets:
             lines.append("允许的宠物身份：")
             for p in pets:
@@ -100,11 +107,11 @@ class ModelClient:
         lines.append(f"主人消息：{text}")
         return "\n".join(lines)
 
-    def extract(self, text: str, pets, facts=None, held=None, photo_count=0) -> dict:
+    def extract(self, text: str, pets, facts=None, held=None, photo_count=0, history=None) -> dict:
         if self.client is None:
             return self._mock(text)
 
-        user_msg = self._build_user(text, pets, facts, held, photo_count)
+        user_msg = self._build_user(text, pets, facts, held, photo_count, history)
         last_err: Exception | None = None
         for attempt in range(2):
             try:

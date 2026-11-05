@@ -5,7 +5,7 @@ def test_reattribute_after_pet_created(client, auth, monkeypatch):
     # 未建猫时发“明月今天吃了26克” → 挂起
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "明月今天吃了26克", "pet_id": 1, "topic": "进食", "value": 26, "unit": "克"}],
             "dialogue": {},
         },
@@ -44,7 +44,7 @@ def test_reminder_fill_time(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天提醒我给明月称重"}]},
         },
@@ -63,7 +63,7 @@ def test_reminder_without_cat_not_attributed(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天提醒称重"}]},
         },
@@ -80,7 +80,7 @@ def test_resolve_held_by_clarification(client, auth, monkeypatch):
 
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "hold_segment", "quote": "他今天拉稀了", "topic": "状态"}],
             "dialogue": {},
         },
@@ -91,7 +91,7 @@ def test_resolve_held_by_clarification(client, auth, monkeypatch):
     # 主人澄清“他指的是明月”
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "resolve_held", "held_id": held_id, "pet_id": 1, "quote": "他指的是明月"}],
             "dialogue": {},
         },
@@ -109,7 +109,7 @@ def test_clarification_assigns_pending_reminder(client, auth, monkeypatch):
     # “明天称体重” → 提醒，待补对象
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天称体重"}]},
         },
@@ -120,7 +120,7 @@ def test_clarification_assigns_pending_reminder(client, auth, monkeypatch):
     # 澄清“他是明月” → 待补对象的提醒归到明月
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {"operations": [], "dialogue": {}},
     )
     client.post("/api/messages", data={"text": "他是明月"}, headers=auth)
     reminders = client.get("/api/reminders", headers=auth).json()["reminders"]
@@ -131,7 +131,7 @@ def test_care_intent_fallback_generates_summary(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "今天他有点软便", "pet_id": 1, "topic": "状态"}],
             "dialogue": {},
         },
@@ -141,7 +141,7 @@ def test_care_intent_fallback_generates_summary(client, auth, monkeypatch):
     # 主人说“整理吧”，但模型不输出 care_request → 确定性兜底生成
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {"operations": [], "dialogue": {}},
     )
     r = client.post("/api/messages", data={"text": "可以，你帮我整理吧"}, headers=auth)
     data = r.json()
@@ -153,7 +153,7 @@ def test_photo_in_message_attribution(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "明月拉稀了", "pet_id": 1, "topic": "状态"}],
             "dialogue": {},
         },
@@ -175,7 +175,7 @@ def test_photo_in_message_unattributed(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {"operations": [], "dialogue": {}},
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {"operations": [], "dialogue": {}},
     )
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
     r = client.post(
@@ -191,7 +191,7 @@ def test_photo_in_message_unattributed(client, auth, monkeypatch):
 def test_create_pet_assigns_pending_reminder(client, auth, monkeypatch):
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天给贝塔称重"}]},
         },

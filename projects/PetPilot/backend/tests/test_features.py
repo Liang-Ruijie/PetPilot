@@ -5,7 +5,7 @@ def test_correction_updates_same_fact(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "明月今天吃了20克", "pet_id": 1, "topic": "进食", "value": 20, "unit": "克"}],
             "dialogue": {},
         },
@@ -15,7 +15,7 @@ def test_correction_updates_same_fact(client, auth, monkeypatch):
 
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "correct_fact", "quote": "明月是40克，不是20克", "fact_id": fact_id, "expected_version": 1, "value": 40, "unit": "克"}],
             "dialogue": {},
         },
@@ -36,7 +36,7 @@ def test_correction_version_conflict_no_change(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "明月今天吃了20克", "pet_id": 1, "topic": "进食", "value": 20, "unit": "克"}],
             "dialogue": {},
         },
@@ -46,7 +46,7 @@ def test_correction_version_conflict_no_change(client, auth, monkeypatch):
 
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "correct_fact", "quote": "明月是40克", "fact_id": fact_id, "expected_version": 99, "value": 40}],
             "dialogue": {},
         },
@@ -62,7 +62,7 @@ def test_reminder_authorized(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天上午九点提醒我给明月称重"}]},
         },
@@ -77,7 +77,7 @@ def test_reminder_negation_rejected(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "别提醒我称重"}]},
         },
@@ -90,7 +90,7 @@ def test_reminder_conditional_rejected(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "如果明天天气好提醒我"}]},
         },
@@ -103,7 +103,7 @@ def test_reminder_transitions(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "明月"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"reminders": [{"pet_id": 1, "quote": "明天上午九点提醒我给明月称重"}]},
         },
@@ -123,7 +123,7 @@ def test_care_summary_generated_and_simulated_reply(client, auth, monkeypatch):
     client.post("/api/pets", json={"name": "贝塔"}, headers=auth)
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [{"kind": "add_observation", "quote": "贝塔有点拉稀", "pet_id": 1, "topic": "状态"}],
             "dialogue": {},
         },
@@ -132,7 +132,7 @@ def test_care_summary_generated_and_simulated_reply(client, auth, monkeypatch):
 
     monkeypatch.setattr(
         ModelClient, "extract",
-        lambda self, t, pets, facts=None, held=None, photo_count=0: {
+        lambda self, t, pets, facts=None, held=None, photo_count=0, history=None: {
             "operations": [],
             "dialogue": {"care_requests": [{"pet_id": 1, "quote": "帮我整理贝塔的就医摘要，先不要发", "title": "贝塔就医准备", "fact_ids": []}]},
         },
