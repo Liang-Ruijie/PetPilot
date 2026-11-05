@@ -394,10 +394,15 @@ function App() {
     if (atBottomRef.current) scrollToBottom()
   }, [messages])
 
-  // 输入框自适应高度：最多 5 行（120px），超出显示展开按钮
+  // 输入框自适应高度：常态固定 40px，展开最多 5 行（120px）
   useEffect(() => {
     const el = taRef.current
     if (!el) return
+    if (!expanded) {
+      el.style.height = '40px'
+      setNeedsExpand(false)
+      return
+    }
     el.style.height = 'auto'
     const h = el.scrollHeight
     el.style.height = Math.min(h, 120) + 'px'
@@ -645,11 +650,24 @@ function App() {
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
-          {!expanded ? (
-            <div
-              onClick={() => { setExpanded(true); requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus())) }}
-              className="flex items-center gap-2 bg-surface rounded-composer shadow-composer p-1.5 cursor-text"
-            >
+          <div className={`bg-surface rounded-composer shadow-composer ${expanded ? 'p-2' : 'p-1.5'}`} onClick={() => taRef.current?.focus()}>
+            {expanded && draftPhotos.length > 0 && (
+              <div className="flex gap-2 px-2 pt-2">
+                {draftPhotos.map((p) => (
+                  <div key={p.id} className="relative w-[calc((100%-32px)/5)] aspect-square shrink-0">
+                    <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
+                    <button
+                      onClick={() => removeDraftPhoto(p.id)}
+                      aria-label="移除照片"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/40 text-white flex items-center justify-center"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
               <button
                 onPointerDown={micDown}
                 onPointerMove={micMove}
@@ -660,7 +678,30 @@ function App() {
               >
                 <SoundWaveIcon />
               </button>
-              <span className="flex-1 px-1 text-[16px] text-muted leading-[40px]">发消息或按住说话…</span>
+              <textarea
+                ref={taRef}
+                className={`flex-1 bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand && expanded ? 'pr-10' : ''}`}
+                rows={1}
+                placeholder={expanded ? '说说今天的变化…' : '发消息或按住说话…'}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onFocus={() => { setExpanded(true); setInputFocused(true) }}
+                onBlur={() => {
+                  setInputFocused(false)
+                  if (!text.trim() && draftPhotos.length === 0) setExpanded(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    send()
+                  }
+                }}
+              />
+              {expanded && needsExpand && !fullExpand && (
+                <button onClick={openFullExpand} aria-label="展开" className="w-8 h-8 flex items-center justify-center text-[#a3a3a3] shrink-0">
+                  <Maximize2 size={18} />
+                </button>
+              )}
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); setShowPlus((v) => !v) }}
@@ -669,66 +710,7 @@ function App() {
               >
                 <Plus size={22} />
               </button>
-            </div>
-          ) : (
-            <div className="relative bg-surface rounded-composer shadow-composer p-2">
-              {draftPhotos.length > 0 && (
-                <div className="flex gap-2 pb-2 px-1">
-                  {draftPhotos.map((p) => (
-                    <div key={p.id} className="relative w-[calc((100%-32px)/5)] aspect-square shrink-0">
-                      <img src={p.url} alt="" onClick={(e) => openPreview(p.url, e.currentTarget)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
-                      <button
-                        onClick={() => removeDraftPhoto(p.id)}
-                        aria-label="移除照片"
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/40 text-white flex items-center justify-center"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="relative py-2">
-                <textarea
-                  ref={taRef}
-                  className={`w-full bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand ? 'pr-10' : ''}`}
-                  rows={1}
-                  placeholder="说说今天的变化…"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onFocus={() => setInputFocused(true)}
-                  onBlur={() => {
-                    setInputFocused(false)
-                    if (!text.trim() && draftPhotos.length === 0) setExpanded(false)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      send()
-                    }
-                  }}
-                />
-                {needsExpand && !fullExpand && (
-                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
-                    <Maximize2 size={18} />
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onPointerDown={micDown}
-                onPointerMove={micMove}
-                  onPointerUp={micUp}
-                  onPointerLeave={micUp}
-                  aria-label="按住说话"
-                  className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
-                >
-                  <SoundWaveIcon />
-                </button>
-                <div className="flex-1" />
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPlus((v) => !v)} aria-label="添加" className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 text-ink">
-                  <Plus size={22} />
-                </button>
+              {expanded && (
                 <button
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={send}
@@ -738,9 +720,9 @@ function App() {
                 >
                   <ArrowUp size={20} />
                 </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </footer>
       )}
 
