@@ -4,12 +4,12 @@ import {
   Bell,
   CalendarDays,
   Camera,
+  ChevronDown,
   FileText,
   Image,
   Inbox,
   ListChecks,
   MessageCircle,
-  Mic,
   PawPrint,
   Plus,
   X,
@@ -39,6 +39,16 @@ const VIEWS: { key: View; label: string; icon: typeof Bell }[] = [
 
 type DraftPhoto = { id: string; file: File; url: string }
 
+function SoundWaveIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+      <circle cx="8" cy="12" r="2.2" fill="currentColor" stroke="none" />
+      <path d="M12.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M15.5 6a9 9 0 0 1 0 12" />
+    </svg>
+  )
+}
+
 function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
   const [url, setUrl] = useState('')
   useEffect(() => {
@@ -52,8 +62,8 @@ function PhotoImg({ id, onPreview }: { id: number; onPreview?: () => void }) {
       alive = false
     }
   }, [id])
-  if (!url) return <div className="flex-1 min-w-0 aspect-square bg-subtle rounded-control" />
-  return <img src={url} alt="" onClick={onPreview} className="flex-1 min-w-0 aspect-square object-cover rounded-control cursor-zoom-in" />
+  if (!url) return <div className="w-14 h-14 bg-subtle rounded-control shrink-0" />
+  return <img src={url} alt="" onClick={onPreview} className="w-14 h-14 object-cover rounded-control cursor-zoom-in shrink-0" />
 }
 
 function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -388,7 +398,8 @@ function App() {
         </div>
       )}
 
-      <main ref={mainRef} onScroll={onMainScroll} onClick={() => { if (expanded) { setExpanded(false); setShowPlus(false) } }} className="flex-1 py-4 overflow-y-auto">
+      <div className="relative flex-1 min-h-0">
+        <main ref={mainRef} onScroll={onMainScroll} onClick={() => { if (expanded) { setExpanded(false); setShowPlus(false) } }} className="h-full py-4 overflow-y-auto">
         {view === 'chat' && (
           <div className="space-y-6">
             {messages.length === 0 && (
@@ -401,19 +412,25 @@ function App() {
             )}
             {messages.map((m) =>
               m.role === 'user' ? (
-                <div key={m.id} className="flex justify-end">
-                  <div className="max-w-[85%] bg-user-bg text-user-text rounded-bubble rounded-br-md px-4 py-3 text-[16px] leading-[1.65]">
-                    {(m.photos && m.photos.length > 0) && (
-                      <div className="flex gap-2 mb-3">
+                <div key={m.id} className="space-y-2">
+                  {(m.photos && m.photos.length > 0) && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] flex gap-2">
                         {m.photos.map((ph, i) => (
                           ph.url
-                            ? <img key={i} src={ph.url} alt="" onClick={() => setPreviewPhoto(ph.url!)} className="flex-1 min-w-0 aspect-square object-cover rounded-control cursor-zoom-in" />
+                            ? <img key={i} src={ph.url} alt="" onClick={() => setPreviewPhoto(ph.url!)} className="w-14 h-14 object-cover rounded-control cursor-zoom-in shrink-0" />
                             : <PhotoImg key={i} id={ph.id} onPreview={() => previewSentPhoto(ph.id)} />
                         ))}
                       </div>
-                    )}
-                    {m.content !== '[图片]' && m.content}
-                  </div>
+                    </div>
+                  )}
+                  {m.content !== '[图片]' && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] bg-user-bg text-user-text rounded-bubble rounded-br-md px-4 py-3 text-[16px] leading-[1.65]">
+                        {m.content}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div key={m.id} className="flex justify-start">
@@ -541,6 +558,8 @@ function App() {
           </div>
         )}
       </main>
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-canvas" />
+      </div>
 
       {view === 'chat' && (
         <footer className="bg-canvas pb-3 pt-1 shrink-0">
@@ -559,15 +578,16 @@ function App() {
                 aria-label="按住说话"
                 className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
               >
-                <Mic size={20} />
+                <SoundWaveIcon />
               </button>
               <span className="flex-1 px-1 text-[16px] text-muted leading-[40px]">发消息或按住说话…</span>
               <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); setShowPlus((v) => !v) }}
                 aria-label="添加"
-                className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-subtle text-ink"
+                className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 text-ink"
               >
-                <Plus size={20} />
+                <Plus size={22} />
               </button>
             </div>
           ) : (
@@ -575,12 +595,12 @@ function App() {
               {draftPhotos.length > 0 && (
                 <div className="flex gap-2 pb-2 px-1">
                   {draftPhotos.map((p) => (
-                    <div key={p.id} className="relative flex-1 aspect-square min-w-0">
+                    <div key={p.id} className="relative w-14 h-14 shrink-0">
                       <img src={p.url} alt="" onClick={() => setPreviewPhoto(p.url)} className="w-full h-full object-cover rounded-control cursor-zoom-in" />
                       <button
                         onClick={() => removeDraftPhoto(p.id)}
                         aria-label="移除照片"
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/70 text-white flex items-center justify-center"
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-ink/40 text-white flex items-center justify-center"
                       >
                         <X size={12} />
                       </button>
@@ -615,11 +635,11 @@ function App() {
                   aria-label="按住说话"
                   className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 ${listening ? 'bg-accent text-white' : 'bg-subtle text-ink'}`}
                 >
-                  <Mic size={20} />
+                  <SoundWaveIcon />
                 </button>
                 <div className="flex-1" />
-                <button onClick={() => setShowPlus((v) => !v)} aria-label="添加" className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 bg-subtle text-ink">
-                  <Plus size={20} />
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => setShowPlus((v) => !v)} aria-label="添加" className="w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 text-ink">
+                  <Plus size={22} />
                 </button>
                 <button
                   onClick={send}
@@ -649,7 +669,6 @@ function App() {
                 <span className="text-[15px]">照片</span>
               </button>
             </div>
-            <button onClick={() => setShowPlus(false)} className="mt-3 w-full py-2 text-[15px] text-muted">取消</button>
           </div>
         </div>
       )}
@@ -660,7 +679,7 @@ function App() {
           aria-label="回到底部"
           className="absolute bottom-[150px] left-1/2 -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-surface border border-line shadow-composer flex items-center justify-center text-ink"
         >
-          <ArrowUp size={18} className="rotate-180" />
+          <ChevronDown size={18} />
         </button>
       )}
 
