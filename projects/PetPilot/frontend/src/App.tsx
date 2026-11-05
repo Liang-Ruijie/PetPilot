@@ -647,7 +647,7 @@ function App() {
       </div>
 
       {view === 'chat' && (
-        <footer className="bg-canvas pb-3 pt-0 shrink-0">
+        <footer className={`bg-canvas pt-0 shrink-0 ${inputFocused ? 'pb-[calc(0.75rem_+_env(safe-area-inset-bottom))]' : 'pb-3'}`}>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
 
