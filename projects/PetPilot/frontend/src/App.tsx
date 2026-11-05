@@ -11,6 +11,7 @@ import {
   ListChecks,
   Maximize2,
   MessageCircle,
+  Minimize2,
   PawPrint,
   Plus,
   X,
@@ -145,6 +146,7 @@ function App() {
   const [inputFocused, setInputFocused] = useState(false)
   const [needsExpand, setNeedsExpand] = useState(false)
   const [fullExpand, setFullExpand] = useState(false)
+  const [fullExpandOpen, setFullExpandOpen] = useState(false)
   const [preview, setPreview] = useState<{ url: string; rect?: { top: number; left: number; width: number; height: number }; open: boolean } | null>(null)
 
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -379,6 +381,17 @@ function App() {
   function scrollToBottom(smooth = false) {
     const el = mainRef.current
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+  }
+
+  function openFullExpand() {
+    setFullExpandOpen(false)
+    setFullExpand(true)
+    requestAnimationFrame(() => requestAnimationFrame(() => setFullExpandOpen(true)))
+  }
+
+  function closeFullExpand() {
+    setFullExpandOpen(false)
+    setTimeout(() => setFullExpand(false), 300)
   }
 
   function openPreview(url: string, el?: HTMLElement) {
@@ -643,7 +656,7 @@ function App() {
                   ))}
                 </div>
               )}
-              <div className="relative py-2.5">
+              <div className="relative py-2">
                 <textarea
                   ref={taRef}
                   className={`w-full bg-transparent px-1 text-[16px] leading-6 text-ink resize-none focus:outline-none overflow-y-auto ${needsExpand ? 'pr-10' : ''}`}
@@ -664,7 +677,7 @@ function App() {
                   }}
                 />
                 {needsExpand && !fullExpand && (
-                  <button onClick={() => setFullExpand(true)} aria-label="展开" className="absolute top-2.5 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
+                  <button onClick={openFullExpand} aria-label="展开" className="absolute top-2 right-1 w-8 h-8 flex items-center justify-center text-[#a3a3a3]">
                     <Maximize2 size={18} />
                   </button>
                 )}
@@ -715,29 +728,32 @@ function App() {
         </div>
       )}
 
-      {preview && (
-        <div
-          className={`fixed inset-0 z-[60] bg-black transition-opacity duration-300 ${preview.open ? 'opacity-100' : 'opacity-0'}`}
-          onClick={closePreview}
-        >
-          <img
-            src={preview.url}
-            alt=""
-            className="object-contain transition-all duration-300 ease-out"
-            style={
-              preview.rect && !preview.open
-                ? { position: 'fixed', top: preview.rect.top, left: preview.rect.left, width: preview.rect.width, height: preview.rect.height, borderRadius: 12 }
-                : { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', padding: 16 }
-            }
-          />
-        </div>
-      )}
+      {preview && (() => {
+        const rect = preview.rect
+        const scale = rect && !preview.open ? Math.max(rect.width / window.innerWidth, 0.05) : 1
+        const tx = rect && !preview.open ? rect.left + rect.width / 2 - window.innerWidth / 2 : 0
+        const ty = rect && !preview.open ? rect.top + rect.height / 2 - window.innerHeight / 2 : 0
+        return (
+          <div
+            className={`fixed inset-0 z-[60] bg-black transition-opacity duration-300 ${preview.open ? 'opacity-100' : 'opacity-0'}`}
+            onClick={closePreview}
+          >
+            <img
+              src={preview.url}
+              alt=""
+              className="fixed left-1/2 top-1/2 max-w-[92vw] max-h-[92vh] object-contain transition-transform duration-300 ease-out"
+              style={{ transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})` }}
+            />
+          </div>
+        )
+      })()}
 
       {fullExpand && (
-        <div className="fixed inset-0 z-[55] bg-canvas flex flex-col">
-          <div className="flex items-center justify-between h-[56px] px-4 shrink-0">
-            <span className="text-[16px] text-ink">编辑</span>
-            <button onClick={() => setFullExpand(false)} className="px-3 py-1.5 rounded-control bg-subtle text-ink text-[14px]">收起</button>
+        <div className={`fixed inset-0 z-[55] bg-canvas flex flex-col transition-all duration-300 ease-out ${fullExpandOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+          <div className="flex items-center justify-end h-[56px] px-4 shrink-0">
+            <button onClick={closeFullExpand} aria-label="收起" className="w-10 h-10 flex items-center justify-center text-[#a3a3a3]">
+              <Minimize2 size={20} />
+            </button>
           </div>
           <textarea
             autoFocus
