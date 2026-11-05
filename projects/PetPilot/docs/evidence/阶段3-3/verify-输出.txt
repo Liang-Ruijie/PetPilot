@@ -1,18 +1,18 @@
-verify.sh 自检  2026-11-05 15:49:22  产品：PetPilot（/Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot）
+verify.sh 自检  2026-11-06 03:33:05  产品：PetPilot（/Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot）
 
 ================ 1. mock 自动化测试 ================
-..................................                                       [100%]
-34 passed in 0.63s
+...................................                                      [100%]
+35 passed in 0.53s
 
  RUN  v5.1.0 /Users/liang/Documents/ai-product-starter-kit-main -new/projects/PetPilot/frontend
 
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
-   Start at  15:49:24
-   Duration  535ms (environment 67%, import 10%, setup 10%, tests 10%, transform 2%, worker 1%)
+   Start at  03:33:06
+   Duration  389ms (environment 61%, tests 14%, import 13%, setup 8%, transform 3%, worker 1%)
 
-结果：通过（34/34）；前端测试通过
+结果：通过（35/35）；前端测试通过
 
 ================ 2. 密钥排除（扫描整个仓库会进 git 的文件，以及本产品的构建产物） ================
 通过：没有 .env 文件被 git 跟踪。
@@ -30,33 +30,33 @@ INFO  [alembic.runtime.migration] Running upgrade 001 -> 002, add corrections, r
 INFO  [alembic.runtime.migration] Running upgrade 002 -> 003, add weekly_reviews
 INFO  [alembic.runtime.migration] Running upgrade 003 -> 004, add held_segment fields + stale flags
 2. 起服务（端口 8010）
-INFO:     Started server process [2649]
+INFO:     Started server process [72733]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
-INFO:     127.0.0.1:60990 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60396 - "POST /api/auth/login HTTP/1.1" 200 OK
 3. 登录并写入带唯一标记的猫
-INFO:     127.0.0.1:60991 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60992 - "POST /api/pets HTTP/1.1" 201 Created
+INFO:     127.0.0.1:60397 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60398 - "POST /api/pets HTTP/1.1" 201 Created
 4. 杀掉服务并确认退出
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [2649]
+INFO:     Finished server process [72733]
 5. 再起服务，按名字读回比对
-INFO:     Started server process [2658]
+INFO:     Started server process [72742]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
-INFO:     127.0.0.1:60994 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60995 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60996 - "GET /api/pets HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60400 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60401 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60402 - "GET /api/pets HTTP/1.1" 200 OK
 6. 结果比对：yes
 通过：重启后数据仍在
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [2658]
+INFO:     Finished server process [72742]
 结果：通过
 
 ================ 4. 前端类型检查 / Lint / 生产构建 ================
@@ -64,8 +64,8 @@ INFO:     Finished server process [2658]
 > frontend@0.0.0 lint
 > oxlint
 
-src/App.tsx:135:17: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
-src/App.tsx:200:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/App.tsx:161:17: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/App.tsx:246:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
 
 > frontend@0.0.0 build
 > tsc -b && vite build
@@ -75,11 +75,11 @@ transforming...
 ✓ 2051 modules transformed.
 rendering chunks...
 computing gzip size...
-dist/index.html                   0.45 kB │ gzip:  0.29 kB
-dist/assets/index-LiO3lx-Z.css   15.45 kB │ gzip:  3.96 kB
-dist/assets/index-CG9gaDMW.js   243.86 kB │ gzip: 76.54 kB
+dist/index.html                   0.47 kB │ gzip:  0.30 kB
+dist/assets/index-BnQEeiFv.css   21.18 kB │ gzip:  5.01 kB
+dist/assets/index-JFdqjDx8.js   248.79 kB │ gzip: 78.03 kB
 
-✓ built in 101ms
+✓ built in 86ms
 结果：通过
 
 ================ 5. 文件齐全与位置（AGENTS.md 第 7 节的产出清单；根目录不放产品文件） ================
@@ -94,7 +94,7 @@ dist/assets/index-CG9gaDMW.js   243.86 kB │ gzip: 76.54 kB
 结果：通过
 
 ================ 汇总（抄进是否表的就是这五行） ================
-是否表第 2 项  mock 测试：      通过（34/34）；前端测试通过
+是否表第 2 项  mock 测试：      通过（35/35）；前端测试通过
 是否表第 4 项  前端检查与构建： 通过
 是否表第 5 项  密钥排除：       通过
 是否表第 6 项  重启后数据恢复： 通过
