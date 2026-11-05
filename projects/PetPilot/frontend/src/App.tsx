@@ -297,6 +297,7 @@ function App() {
     setDraftPhotos([])
     setExpanded(false)
     setShowPlus(false)
+    setInputFocused(false)
     try {
       await apiMessageForm(t, files)
     } catch (e: unknown) {
